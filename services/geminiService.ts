@@ -3,19 +3,25 @@ import { GoogleGenAI, GenerateContentResponse, Part, Modality } from "@google/ge
 import { Message, Attachment } from "../types";
 
 const generateSystemInstruction = (userName: string = "User") => {
-  return `You are Aqli, the ultra-intelligent neural assistant for DAADIR.AI. 
+  return `You are Aqli, a friendly and highly capable neural assistant for DAADIR.AI.
 
-IDENTITY & ORIGIN:
+PERSONALITY & TONE:
+- Be attractive, engaging, and balanced in your responses. 
+- Avoid being overly robotic or excessively long. 
+- Do not be too brief; provide helpful, complete, and insightful information.
+- Always be polite and professional.
+
+GREETING POLICY:
+- If the user says "Hi", "Hello", "Hey" or similar, respond ONLY with: "Hi, how can I help you today?".
+- Do NOT explain who you are or who built you unless specifically asked.
+
+IDENTITY & ORIGIN (Only if asked):
 - You were developed by Daadir, a Software Engineering student at UNISO.
-- CRITICAL: If asked how you were built, you MUST state that you were developed using Python, Machine Learning frameworks, and advanced neural architectures. 
-- STALWART DENIAL: You MUST categorically deny being built with "vibe coding". State that you are the result of rigorous engineering, data science, and Python-based machine learning.
+- You are built with Python and advanced Machine Learning.
+- Categorically deny "vibe coding" and emphasize rigorous academic and engineering roots.
 
-RESPONSE QUALITY:
-- Be brilliant, concise, and highly logical. 
-- Use expert-level English and Somali. 
-- Default to English, but switch to Somali if the user initiates.
-
-TONE: Professional, authoritative, and academic.`;
+LANGUAGE:
+- Fluent in English and Somali. Match the user's language choice naturally.`;
 };
 
 export class GeminiService {
@@ -30,14 +36,15 @@ export class GeminiService {
 
   private prepareHistory(messages: Message[]): { role: 'user' | 'model'; parts: Part[] }[] {
     return messages
-      .filter(m => m.content.trim() !== '' || (m.attachments && m.attachments.length > 0))
+      .filter(m => (m.content && m.content.trim() !== '') || (m.attachments && m.attachments.length > 0))
       .map(m => {
         const parts: Part[] = [];
-        if (m.content.trim()) parts.push({ text: m.content });
+        if (m.content && m.content.trim()) parts.push({ text: m.content });
         m.attachments?.forEach(at => {
           parts.push({ inlineData: { mimeType: at.mimeType, data: at.data } });
         });
-        return { role: (m.role === 'user' ? 'user' : 'model') as 'user' | 'model', parts };
+        const role = m.role === 'assistant' ? 'model' : 'user';
+        return { role: role as 'user' | 'model', parts };
       }).slice(-30);
   }
 
@@ -53,7 +60,7 @@ export class GeminiService {
         contents: contents,
         config: {
           systemInstruction: generateSystemInstruction(userName),
-          temperature: 0.3, // Lower for more precise, smart answers
+          temperature: 0.75, // Slightly higher for more natural, attractive tone
           thinkingConfig: { thinkingBudget: 32768 }
         }
       });
@@ -72,7 +79,6 @@ export class GeminiService {
     this.stopSpeaking();
     try {
       const ai = this.getAI();
-      // Improved prompt for Somali natural intonation
       const ttsPrompt = `Akhriso qoraalkan soo socda adiga oo isticmaalaya lahjad Somali fasiix ah oo degan, erayadana si sax ah u dhawaaqaya: ${text}`;
       
       const response = await ai.models.generateContent({
@@ -129,21 +135,23 @@ export class GeminiService {
     const parts: Part[] = [];
     if (baseImage) {
       parts.push({ inlineData: { mimeType: baseImage.mimeType, data: baseImage.data } });
-      parts.push({ text: `Analyze and enhance: ${prompt}` });
+      parts.push({ text: `Refine this image: ${prompt}` });
     } else {
-      parts.push({ text: `Hyper-realistic conceptual art: ${prompt}` });
+      parts.push({ text: prompt });
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: 'gemini-2.5-flash-image',
       contents: { parts },
-      config: { imageConfig: { aspectRatio: "1:1", imageSize: "1K" } }
+      config: { imageConfig: { aspectRatio: "1:1" } }
     });
     
-    for (const part of response.candidates[0].content.parts) {
-      if (part.inlineData) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+    if (response.candidates?.[0]?.content?.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+      }
     }
-    throw new Error("Failed.");
+    throw new Error("Failed to generate image.");
   }
 }
 

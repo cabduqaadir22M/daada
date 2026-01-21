@@ -48,18 +48,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => { setView('chat'); onNewChat(false); onToggle(); }}
             className="w-full flex items-center justify-between px-5 py-4 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl transition-all hover:scale-[0.98] active:scale-95 shadow-xl shadow-zinc-900/10 dark:shadow-white/5"
           >
-            <span className="text-[11px] font-black uppercase tracking-widest">New Session</span>
+            <span className="text-[11px] font-bold tracking-tight">New chat</span>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="3" strokeLinecap="round"/></svg>
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar px-3 space-y-1">
           <div className="px-4 mb-2">
-            <h3 className="text-[9px] font-black text-zinc-400 uppercase tracking-widest opacity-60">Memory Bank</h3>
+            <h3 className="text-[9px] font-bold text-zinc-400 tracking-wider opacity-60">Memory bank</h3>
           </div>
           {sessions.length === 0 ? (
             <div className="px-6 py-10 text-center opacity-30">
-              <p className="text-[10px] font-black italic tracking-widest uppercase">No data units</p>
+              <p className="text-[10px] font-bold italic tracking-wider">No sessions yet</p>
             </div>
           ) : (
             sessions.map(s => (
@@ -68,7 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => { setView('chat'); onSelectSession(s.id); onToggle(); }}
                 className={`w-full text-left px-4 py-3.5 rounded-2xl text-[12px] font-bold truncate transition-all ${activeSessionId === s.id ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 border border-zinc-200 dark:border-white/5 shadow-md scale-[1.02]' : 'text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-900/50 hover:text-zinc-900'}`}
               >
-                {s.title || 'Untitled Stream'}
+                {s.title || 'Untitled chat'}
               </button>
             ))
           )}
@@ -80,7 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
              className={`w-full flex items-center gap-3 px-5 py-4 rounded-2xl transition-all shadow-sm ${view === 'image-gen' ? 'bg-blue-600 text-white shadow-blue-600/20' : 'text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-900'}`}
            >
              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-             <span className="text-[11px] font-black uppercase tracking-widest">Aqli Vision</span>
+             <span className="text-[11px] font-bold">Aqli vision</span>
            </button>
 
            <div className="flex items-center gap-3 px-4 py-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/5 shadow-lg">
@@ -88,9 +88,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover rounded-xl" /> : user.name.charAt(0)}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-black text-zinc-900 dark:text-white truncate uppercase tracking-tight">{user.name}</p>
-                <button onClick={onLogOut} className={`text-[9px] font-black uppercase tracking-widest hover:opacity-70 transition-opacity ${isRealUser ? 'text-red-500' : 'text-blue-600'}`}>
-                  {isRealUser ? 'Log Out' : 'Add Account'}
+                <p className="text-[11px] font-bold text-zinc-900 dark:text-white truncate tracking-tight">{user.name}</p>
+                <button onClick={onLogOut} className={`text-[9px] font-bold tracking-tight hover:opacity-70 transition-opacity ${isRealUser ? 'text-red-500' : 'text-blue-600'}`}>
+                  {isRealUser ? 'Log out' : 'Add account'}
                 </button>
               </div>
            </div>

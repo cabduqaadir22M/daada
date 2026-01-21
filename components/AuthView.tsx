@@ -178,10 +178,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthSuccess }) => {
               <Logo className="w-full h-full" hideText={true} />
             </div>
             <h1 className="text-3xl font-black tracking-tighter">
-              {isLogin ? 'Welcome Back' : step === 1 ? 'Join DAADIR' : 'Final Step'}
+              {isLogin ? 'Welcome back' : step === 1 ? 'Join Daadir' : 'Final step'}
             </h1>
-            <p className="text-zinc-500 text-[10px] mt-2 font-black opacity-60 uppercase tracking-widest">
-              Somali Intelligence
+            <p className="text-zinc-500 text-[10px] mt-2 font-bold opacity-60 tracking-wider">
+              Somali intelligence
             </p>
           </div>
 
@@ -190,16 +190,16 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthSuccess }) => {
               <>
                 {!isLogin && (
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-zinc-400 ml-1 uppercase">Full Name</label>
+                    <label className="text-[10px] font-bold text-zinc-400 ml-1">Full name</label>
                     <input 
                       type="text" value={name} onChange={e => setName(e.target.value)}
                       className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-2xl px-5 py-4 text-sm outline-none transition-all focus:ring-4 focus:ring-blue-500/10"
-                      placeholder="Your Full Name" required
+                      placeholder="Your full name" required
                     />
                   </div>
                 )}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-400 ml-1 uppercase">Email (Gmail)</label>
+                  <label className="text-[10px] font-bold text-zinc-400 ml-1">Email (Gmail)</label>
                   <input 
                     type="email" value={email} onChange={e => setEmail(e.target.value)}
                     className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-2xl px-5 py-4 text-sm outline-none transition-all focus:ring-4 focus:ring-blue-500/10"
@@ -208,7 +208,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthSuccess }) => {
                 </div>
                 {!isLogin && (
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-zinc-400 ml-1 uppercase">Username</label>
+                    <label className="text-[10px] font-bold text-zinc-400 ml-1">Username</label>
                     <input 
                       type="text" value={username} onChange={e => setUsername(e.target.value.toLowerCase().replace(/\s/g, ''))}
                       className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-2xl px-5 py-4 text-sm outline-none transition-all focus:ring-4 focus:ring-blue-500/10"
@@ -217,7 +217,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthSuccess }) => {
                   </div>
                 )}
                 <div className="space-y-1.5 relative">
-                  <label className="text-[10px] font-black text-zinc-400 ml-1 uppercase">Password</label>
+                  <label className="text-[10px] font-bold text-zinc-400 ml-1">Password</label>
                   <div className="relative">
                     <input 
                       type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)}
@@ -232,7 +232,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthSuccess }) => {
               </>
             ) : (
               <div className="space-y-4">
-                <p className="text-[10px] font-black text-zinc-400 text-center uppercase tracking-widest">Select Interests ({interests.length}/3)</p>
+                <p className="text-[10px] font-bold text-zinc-400 text-center tracking-wider">Select interests ({interests.length}/3)</p>
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1 custom-scrollbar">
                   {INTEREST_OPTIONS.map(opt => (
                     <button
@@ -256,15 +256,15 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthSuccess }) => {
             <button 
               type="submit" 
               disabled={isLoading} 
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl transition-all shadow-xl shadow-blue-600/20 disabled:opacity-50 text-[11px] uppercase tracking-widest"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl transition-all shadow-xl shadow-blue-600/20 disabled:opacity-50 text-[11px] tracking-widest"
             >
-              {isLoading ? 'Wait...' : isLogin ? 'Sign In' : step === 1 ? 'Next' : 'Create Account'}
+              {isLoading ? 'Wait...' : isLogin ? 'Sign in' : step === 1 ? 'Next' : 'Create account'}
             </button>
           </form>
 
           <div className="mt-8 text-center border-t border-zinc-100 dark:border-white/5 pt-6">
             <button onClick={() => { setIsLogin(!isLogin); setStep(1); setError(''); }} className="text-[11px] font-bold text-zinc-400 hover:text-zinc-600 transition-colors">
-              {isLogin ? <>New here? <span className="text-blue-600 underline">Create account</span></> : <>Have an account? <span className="text-blue-600 underline">Sign In</span></>}
+              {isLogin ? <>New here? <span className="text-blue-600 underline">Create account</span></> : <>Have an account? <span className="text-blue-600 underline">Sign in</span></>}
             </button>
           </div>
           <div id="googleBtnContainer" className="mt-6 w-full flex justify-center min-h-[50px]"></div>
