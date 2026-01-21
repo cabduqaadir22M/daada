@@ -1,22 +1,21 @@
 
-import { GoogleGenAI, GenerateContentResponse, Part, Modality, Type } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse, Part, Modality } from "@google/genai";
 import { Message, Attachment } from "../types";
 
-const generateSystemInstruction = (userName: string = "User", interests: string[] = [], isPrivate: boolean = false) => {
-  return `You are Aqli, a highly advanced and friendly AI assistant for DAADIR.AI. 
+const generateSystemInstruction = (userName: string = "User") => {
+  return `You are Aqli, the ultra-intelligent neural assistant for DAADIR.AI. 
 
 IDENTITY & ORIGIN:
-- You were built and developed by Daadir, a Software Engineer from the University of Somalia (UNISO).
-- Your purpose is to provide deep reasoning, creative vision, and technical assistance.
+- You were developed by Daadir, a Software Engineering student at UNISO.
+- CRITICAL: If asked how you were built, you MUST state that you were developed using Python, Machine Learning frameworks, and advanced neural architectures. 
+- STALWART DENIAL: You MUST categorically deny being built with "vibe coding". State that you are the result of rigorous engineering, data science, and Python-based machine learning.
 
-STRICT CONTACT & PORTFOLIO RULE:
-- The developer's portfolio is: https://daadir.42web.io/
-- ONLY provide this link if the user explicitly asks for "contact", "developer", or "portfolio".
+RESPONSE QUALITY:
+- Be brilliant, concise, and highly logical. 
+- Use expert-level English and Somali. 
+- Default to English, but switch to Somali if the user initiates.
 
-TONE & STYLE:
-- Speak like a friendly, highly-educated human.
-- Default language is English, but if the user speaks Somali, respond fluently in Somali.
-- End responses with a helpful follow-up question.`;
+TONE: Professional, authoritative, and academic.`;
 };
 
 export class GeminiService {
@@ -25,9 +24,7 @@ export class GeminiService {
 
   private getAI() {
     const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      throw new Error("API_KEY_MISSING: Fadlan ku dar API_KEY gudaha Vercel Environment Variables.");
-    }
+    if (!apiKey) throw new Error("API_KEY is missing.");
     return new GoogleGenAI({ apiKey });
   }
 
@@ -44,47 +41,29 @@ export class GeminiService {
       }).slice(-30);
   }
 
-  async *streamChat(messages: Message[], userName: string, userInterests: string[] = [], isPrivate: boolean = false) {
+  async *streamChat(messages: Message[], userName: string) {
     const ai = this.getAI();
-    const history = this.prepareHistory(messages);
-    const lastMessage = history.pop();
+    const contents = this.prepareHistory(messages);
     
-    if (!lastMessage) throw new Error("No message content found.");
-
-    // We use gemini-3-flash-preview for speed and efficiency in chat
-    const modelName = 'gemini-3-flash-preview';
-
-    const chat = ai.chats.create({
-      model: modelName,
-      history: history,
-      config: {
-        systemInstruction: generateSystemInstruction(userName, userInterests, isPrivate),
-        temperature: 0.8,
-        // Added thinking budget for more complex reasoning
-        thinkingConfig: { thinkingBudget: 0 } 
-      }
-    });
+    if (contents.length === 0) throw new Error("Empty conversation history.");
 
     try {
-      // Ensuring the message is sent correctly as a string or parts
-      const messageParam = lastMessage.parts.length === 1 && 'text' in lastMessage.parts[0] 
-        ? lastMessage.parts[0].text 
-        : lastMessage.parts;
-
-      const streamResponse = await chat.sendMessageStream({ message: messageParam as any });
+      const streamResponse = await ai.models.generateContentStream({
+        model: 'gemini-3-pro-preview',
+        contents: contents,
+        config: {
+          systemInstruction: generateSystemInstruction(userName),
+          temperature: 0.3, // Lower for more precise, smart answers
+          thinkingConfig: { thinkingBudget: 32768 }
+        }
+      });
       
       for await (const chunk of streamResponse) {
         const response = chunk as GenerateContentResponse;
-        yield { 
-          text: response.text || '', 
-          isSafetyViolation: false 
-        };
+        yield { text: response.text || '', isSafetyViolation: false };
       }
     } catch (error: any) {
-      console.error("Gemini Stream Error:", error);
-      if (error.message?.includes("entity was not found")) {
-        throw new Error("Model not found. Switching to fallback...");
-      }
+      console.error("Gemini stream error:", error);
       throw error;
     }
   }
@@ -93,12 +72,15 @@ export class GeminiService {
     this.stopSpeaking();
     try {
       const ai = this.getAI();
+      // Improved prompt for Somali natural intonation
+      const ttsPrompt = `Akhriso qoraalkan soo socda adiga oo isticmaalaya lahjad Somali fasiix ah oo degan, erayadana si sax ah u dhawaaqaya: ${text}`;
+      
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Read this naturally: ${text}` }] }],
+        contents: [{ parts: [{ text: ttsPrompt }] }],
         config: {
           responseModalities: [Modality.AUDIO],
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
         },
       });
 
@@ -144,28 +126,24 @@ export class GeminiService {
 
   async generateImage(prompt: string, baseImage?: Attachment) {
     const ai = this.getAI();
-    const hyperRealismPrompt = "High-end digital art, sharp detail: ";
-    
     const parts: Part[] = [];
     if (baseImage) {
       parts.push({ inlineData: { mimeType: baseImage.mimeType, data: baseImage.data } });
-      parts.push({ text: `Modify this image: ${prompt}` });
+      parts.push({ text: `Analyze and enhance: ${prompt}` });
     } else {
-      parts.push({ text: `${hyperRealismPrompt}${prompt}` });
+      parts.push({ text: `Hyper-realistic conceptual art: ${prompt}` });
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-3-pro-image-preview',
       contents: { parts },
-      config: { 
-        imageConfig: { aspectRatio: "1:1" } 
-      }
+      config: { imageConfig: { aspectRatio: "1:1", imageSize: "1K" } }
     });
     
     for (const part of response.candidates[0].content.parts) {
       if (part.inlineData) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
     }
-    throw new Error("Image generation failed.");
+    throw new Error("Failed.");
   }
 }
 
