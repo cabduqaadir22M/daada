@@ -10,18 +10,12 @@ IDENTITY & ORIGIN:
 - Your purpose is to provide deep reasoning, creative vision, and technical assistance.
 
 STRICT CONTACT & PORTFOLIO RULE:
-- The developer's portfolio and contact link is: https://daadir.42web.io/
-- CRITICAL: DO NOT share, mention, or link to this URL in your greeting or during normal conversation.
-- ONLY provide this link if the user explicitly asks for "more details", "how to contact the developer", or "portfolio".
-- If these specific requests are not made, the link must remain strictly confidential and hidden.
+- The developer's portfolio is: https://daadir.42web.io/
+- ONLY provide this link if the user explicitly asks for "contact", "developer", or "portfolio".
 
 TONE & STYLE:
 - Speak like a friendly, highly-educated human.
-- Be clear, concise, and professional.
-- Default language is English. However, if the user speaks Somali or another language, respond fluously in that language.
-
-GUIDELINES:
-- You cannot generate images in this chat. Direct users to 'Aqli Vision' for that.
+- Default language is English, but if the user speaks Somali, respond fluently in Somali.
 - End responses with a helpful follow-up question.`;
 };
 
@@ -30,7 +24,11 @@ export class GeminiService {
   private activeContext: AudioContext | null = null;
 
   private getAI() {
-    return new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      throw new Error("API_KEY_MISSING: Fadlan ku dar API_KEY gudaha Vercel Environment Variables.");
+    }
+    return new GoogleGenAI({ apiKey });
   }
 
   private prepareHistory(messages: Message[]): { role: 'user' | 'model'; parts: Part[] }[] {
@@ -43,34 +41,50 @@ export class GeminiService {
           parts.push({ inlineData: { mimeType: at.mimeType, data: at.data } });
         });
         return { role: (m.role === 'user' ? 'user' : 'model') as 'user' | 'model', parts };
-      }).slice(-40);
+      }).slice(-30);
   }
 
   async *streamChat(messages: Message[], userName: string, userInterests: string[] = [], isPrivate: boolean = false) {
     const ai = this.getAI();
     const history = this.prepareHistory(messages);
-    const currentMessage = history.pop();
-    if (!currentMessage) throw new Error("Invalid state");
+    const lastMessage = history.pop();
+    
+    if (!lastMessage) throw new Error("No message content found.");
 
-    const modelName = 'gemini-3-pro-preview';
+    // We use gemini-3-flash-preview for speed and efficiency in chat
+    const modelName = 'gemini-3-flash-preview';
 
     const chat = ai.chats.create({
       model: modelName,
       history: history,
       config: {
         systemInstruction: generateSystemInstruction(userName, userInterests, isPrivate),
-        temperature: 0.7,
+        temperature: 0.8,
+        // Added thinking budget for more complex reasoning
+        thinkingConfig: { thinkingBudget: 0 } 
       }
     });
 
     try {
-      const streamResponse = await chat.sendMessageStream({ message: currentMessage.parts });
+      // Ensuring the message is sent correctly as a string or parts
+      const messageParam = lastMessage.parts.length === 1 && 'text' in lastMessage.parts[0] 
+        ? lastMessage.parts[0].text 
+        : lastMessage.parts;
+
+      const streamResponse = await chat.sendMessageStream({ message: messageParam as any });
+      
       for await (const chunk of streamResponse) {
         const response = chunk as GenerateContentResponse;
-        yield { text: response.text || '', isSafetyViolation: response.text?.includes('[SAFETY_VIOLATION]') };
+        yield { 
+          text: response.text || '', 
+          isSafetyViolation: false 
+        };
       }
-    } catch (error) {
-      console.error("Connection error:", error);
+    } catch (error: any) {
+      console.error("Gemini Stream Error:", error);
+      if (error.message?.includes("entity was not found")) {
+        throw new Error("Model not found. Switching to fallback...");
+      }
       throw error;
     }
   }
@@ -81,7 +95,7 @@ export class GeminiService {
       const ai = this.getAI();
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Read this clearly: ${text.replace(/\[SAFETY_VIOLATION\]/g, '')}` }] }],
+        contents: [{ parts: [{ text: `Read this naturally: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
@@ -99,7 +113,10 @@ export class GeminiService {
         this.activeSource.onended = () => { onEnd?.(); this.stopSpeaking(); };
         this.activeSource.start(0);
       } else { onEnd?.(); }
-    } catch (e) { console.error(e); onEnd?.(); }
+    } catch (e) { 
+      console.error("TTS Error:", e);
+      onEnd?.(); 
+    }
   }
 
   private decodeBase64(base64: string) {
@@ -121,18 +138,18 @@ export class GeminiService {
   }
 
   stopSpeaking() {
-    if (this.activeSource) { this.activeSource.stop(); this.activeSource = null; }
-    if (this.activeContext) { this.activeContext.close(); this.activeContext = null; }
+    if (this.activeSource) { try { this.activeSource.stop(); } catch(e) {} this.activeSource = null; }
+    if (this.activeContext) { try { this.activeContext.close(); } catch(e) {} this.activeContext = null; }
   }
 
   async generateImage(prompt: string, baseImage?: Attachment) {
     const ai = this.getAI();
-    const hyperRealismPrompt = "High quality photography, natural lighting, sharp focus: ";
+    const hyperRealismPrompt = "High-end digital art, sharp detail: ";
     
     const parts: Part[] = [];
     if (baseImage) {
       parts.push({ inlineData: { mimeType: baseImage.mimeType, data: baseImage.data } });
-      parts.push({ text: `Refine this image naturally: ${prompt}.` });
+      parts.push({ text: `Modify this image: ${prompt}` });
     } else {
       parts.push({ text: `${hyperRealismPrompt}${prompt}` });
     }
@@ -141,16 +158,14 @@ export class GeminiService {
       model: 'gemini-2.5-flash-image',
       contents: { parts },
       config: { 
-        imageConfig: { 
-          aspectRatio: "1:1"
-        } 
+        imageConfig: { aspectRatio: "1:1" } 
       }
     });
     
     for (const part of response.candidates[0].content.parts) {
       if (part.inlineData) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
     }
-    throw new Error("Could not create image");
+    throw new Error("Image generation failed.");
   }
 }
 

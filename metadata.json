@@ -1,6 +1,6 @@
 {
   "name": "DAADIR.AI",
-  "short_name": "DAADIR",
+  "short_name": "daadir",
   "description": "Somali Intelligence Redefined. Experience advanced neural reasoning and vision in a beautiful, private interface.",
   "requestFramePermissions": [
     "camera",

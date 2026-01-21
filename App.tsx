@@ -142,8 +142,9 @@ const App: React.FC = () => {
         });
       }
     } catch (e: any) {
+      console.error("Critical Connection Error:", e);
       setIsLoading(false);
-      const errorMsg = "Sorry, an error occurred during the connection. Please try again.";
+      const errorMsg = "Fadlan hubi in API_KEY-ga lagu daray Vercel Settings. Haddii kale, isku day mar kale.";
       setCurrentRenderSession(prev => prev ? { ...prev, messages: prev.messages.map(m => m.id === assistantId ? { ...m, content: errorMsg } : m) } : prev);
     } finally {
       setIsLoading(false);
@@ -164,7 +165,7 @@ const App: React.FC = () => {
                 {!currentRenderSession || currentRenderSession.messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center mt-20 text-center animate-in fade-in duration-1000">
                     <Logo className="w-40 h-40 mb-2" onLogoTextClick={() => setView('admin')} />
-                    <h1 className="text-3xl font-black mb-4 tracking-tight text-zinc-900 dark:text-white">How can I help you today?</h1>
+                    <h1 className="text-3xl font-black mb-4 tracking-tight text-zinc-900 dark:text-white">Sideen kuu caawin karaa maanta?</h1>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -205,7 +206,7 @@ const App: React.FC = () => {
                     <textarea 
                       value={input} onChange={e => setInput(e.target.value)}
                       onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                      placeholder="Ask me anything..."
+                      placeholder="Wax i weydii..."
                       className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-3 outline-none resize-none max-h-32 dark:text-white placeholder-zinc-400 font-medium"
                       rows={1}
                     />

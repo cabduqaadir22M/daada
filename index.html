@@ -84,27 +84,27 @@
       }
 
       @keyframes pulse-custom {
-        0%, 1000% { opacity: 1; transform: scale(1); }
+        0%, 100% { opacity: 1; transform: scale(1); }
         50% { opacity: 0.7; transform: scale(0.95); }
       }
       .animate-loader {
         animation: pulse-custom 2s infinite ease-in-out;
       }
     </style>
-    <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@18.2.0",
-        "react-dom": "https://esm.sh/react-dom@18.2.0",
-        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-        "@google/genai": "https://esm.sh/@google/genai@1.35.0",
-        "bcryptjs": "https://esm.sh/bcryptjs@2.4.3",
-        "react/": "https://esm.sh/react@18.2.0/",
-        "react-dom/": "https://esm.sh/react-dom@18.2.0/"
-      }
-    }
-    </script>
-  </head>
+  <script type="importmap">
+{
+  "imports": {
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "bcryptjs": "https://esm.sh/bcryptjs@^3.0.3"
+  }
+}
+</script>
+</head>
   <body class="bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 transition-colors">
     <div id="root">
       <div class="initial-loader">
@@ -118,7 +118,7 @@
         <div style="margin-top: 32px; font-weight: 800; font-size: 14px; letter-spacing: 0.8em; color: #fff; text-indent: 0.8em;">DAADIR</div>
       </div>
     </div>
-    <script type="module" src="./index.tsx"></script>
+    <script type="module" src="/index.tsx"></script>
     <script>
       window.addEventListener('load', () => {
         setTimeout(() => {
