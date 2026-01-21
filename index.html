@@ -56,15 +56,12 @@
         resize: none !important;
       }
 
+      .custom-scrollbar {
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE/Edge */
+      }
       .custom-scrollbar::-webkit-scrollbar {
-        width: 4px;
-      }
-      .custom-scrollbar::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: #88888822;
-        border-radius: 10px;
+        display: none; /* Chrome/Safari */
       }
       
       #root {

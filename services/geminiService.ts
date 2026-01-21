@@ -8,7 +8,7 @@ const generateSystemInstruction = (userName: string = "User") => {
 PERSONALITY & TONE:
 - Be attractive, engaging, and balanced in your responses. 
 - Avoid being overly robotic or excessively long. 
-- Do not be too brief; provide helpful, complete, and insightful information.
+- Provide helpful, complete, and insightful information that is moderate in length.
 - Always be polite and professional.
 
 GREETING POLICY:
@@ -35,17 +35,39 @@ export class GeminiService {
   }
 
   private prepareHistory(messages: Message[]): { role: 'user' | 'model'; parts: Part[] }[] {
-    return messages
-      .filter(m => (m.content && m.content.trim() !== '') || (m.attachments && m.attachments.length > 0))
-      .map(m => {
-        const parts: Part[] = [];
-        if (m.content && m.content.trim()) parts.push({ text: m.content });
-        m.attachments?.forEach(at => {
+    const history: { role: 'user' | 'model'; parts: Part[] }[] = [];
+    
+    // Filter and normalize history for Gemini (Alternating User/Model roles)
+    messages.forEach((m) => {
+      const role = m.role === 'assistant' ? 'model' : 'user';
+      const parts: Part[] = [];
+      
+      if (m.content && m.content.trim()) {
+        parts.push({ text: m.content });
+      }
+      
+      m.attachments?.forEach(at => {
+        if (at.data) {
           parts.push({ inlineData: { mimeType: at.mimeType, data: at.data } });
-        });
-        const role = m.role === 'assistant' ? 'model' : 'user';
-        return { role: role as 'user' | 'model', parts };
-      }).slice(-30);
+        }
+      });
+
+      if (parts.length > 0) {
+        if (history.length > 0 && history[history.length - 1].role === role) {
+          // Merge parts if the role is the same as the previous one (Gemini requirement)
+          history[history.length - 1].parts.push(...parts);
+        } else {
+          history.push({ role, parts });
+        }
+      }
+    });
+
+    // Gemini MUST start with a 'user' message
+    while (history.length > 0 && history[0].role !== 'user') {
+      history.shift();
+    }
+
+    return history.slice(-20);
   }
 
   async *streamChat(messages: Message[], userName: string) {
@@ -60,7 +82,7 @@ export class GeminiService {
         contents: contents,
         config: {
           systemInstruction: generateSystemInstruction(userName),
-          temperature: 0.75, // Slightly higher for more natural, attractive tone
+          temperature: 0.75,
           thinkingConfig: { thinkingBudget: 32768 }
         }
       });
