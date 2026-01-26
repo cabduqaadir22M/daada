@@ -15,7 +15,6 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => storage.getActiveUser());
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [currentRenderSession, setCurrentRenderSession] = useState<ChatSession | null>(null);
   const [view, setView] = useState<ViewType>('chat');
   const [input, setInput] = useState('');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -39,47 +38,41 @@ const App: React.FC = () => {
 
   useEffect(() => { loadSessions(); }, [loadSessions]);
 
-  // Sync currentRenderSession with sessions list
-  useEffect(() => {
-    if (activeSessionId) {
-      const found = sessions.find(s => s.id === activeSessionId);
-      if (found) setCurrentRenderSession(found);
-    } else {
-      setCurrentRenderSession(null);
-    }
-  }, [activeSessionId, sessions]);
+  const activeSession = sessions.find(s => s.id === activeSessionId) || null;
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [currentRenderSession?.messages, isLoading, view]);
+  }, [activeSession?.messages.length, isLoading, view]);
 
   const handleSend = async () => {
     const trimmedInput = input.trim();
     if ((!trimmedInput && attachments.length === 0) || isLoading || !user) return;
 
-    let currentSId = activeSessionId;
-    let session = currentRenderSession;
+    let sId = activeSessionId;
+    let session = activeSession;
 
-    // Create session if it doesn't exist
-    if (!currentSId || !session) {
-      currentSId = `session_${Date.now()}`;
+    // 1. Create session if needed
+    if (!sId || !session) {
+      sId = `session_${Date.now()}`;
       session = {
-        id: currentSId,
+        id: sId,
         userId: user.id,
         title: trimmedInput.slice(0, 40) || 'New Conversation',
         messages: [],
         createdAt: Date.now(),
         updatedAt: Date.now()
       };
-      setActiveSessionId(currentSId);
+      setActiveSessionId(sId);
+      // Immediately add to sessions list to ensure rendering
+      setSessions(prev => [session!, ...prev]);
     }
 
     const userMsg: Message = {
       id: `msg_user_${Date.now()}`,
       role: 'user',
-      content: trimmedInput || "Attached visual context",
+      content: trimmedInput || "Visual context shared",
       timestamp: Date.now(),
       attachments: attachments.length > 0 ? [...attachments] : undefined
     };
@@ -92,20 +85,17 @@ const App: React.FC = () => {
       timestamp: Date.now() + 1 
     };
     
-    // 1. Add messages to local state immediately to avoid disappearing UI
+    // 2. Update UI State IMMEDIATELY
     const updatedMessages = [...session.messages, userMsg, assistantMsg];
     const updatedSession = { ...session, messages: updatedMessages, updatedAt: Date.now() };
 
-    setSessions(prev => {
-      const filtered = prev.filter(s => s.id !== currentSId);
-      return [updatedSession, ...filtered];
-    });
-
+    setSessions(prev => prev.map(s => s.id === sId ? updatedSession : s));
     setInput('');
     setAttachments([]);
     setIsLoading(true);
 
     try {
+      // 3. Call API with history excluding the empty assistant placeholder
       const historyForAPI = [...session.messages, userMsg];
       const stream = geminiService.streamChat(historyForAPI, user.name);
       let fullContent = '';
@@ -113,9 +103,9 @@ const App: React.FC = () => {
       for await (const update of stream) {
         fullContent += update.text || '';
         
-        // Update session in list as chunks arrive
+        // Update the streaming content in the state
         setSessions(prev => prev.map(s => {
-          if (s.id !== currentSId) return s;
+          if (s.id !== sId) return s;
           return {
             ...s,
             messages: s.messages.map(m => m.id === assistantId ? { ...m, content: fullContent } : m)
@@ -123,20 +113,19 @@ const App: React.FC = () => {
         }));
       }
 
-      // Final save to storage
+      // 4. Persistence
       const finalSession = { 
-        ...session, 
-        messages: [...session.messages, userMsg, { ...assistantMsg, content: fullContent }],
-        updatedAt: Date.now()
+        ...updatedSession, 
+        messages: [...updatedSession.messages.filter(m => m.id !== assistantId), { ...assistantMsg, content: fullContent }]
       };
       await storage.saveSession(finalSession);
     } catch (e: any) {
       console.error("Neural processing failed:", e);
       setSessions(prev => prev.map(s => {
-        if (s.id !== currentSId) return s;
+        if (s.id !== sId) return s;
         return {
           ...s,
-          messages: s.messages.map(m => m.id === assistantId ? { ...m, content: "System interruption. Please check your link and try again." } : m)
+          messages: s.messages.map(m => m.id === assistantId ? { ...m, content: "Neural Link Interrupted. Please check your connection and try again." } : m)
         };
       }));
     } finally {
@@ -150,7 +139,7 @@ const App: React.FC = () => {
     <div className="flex h-screen w-full bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans overflow-hidden transition-colors selection:bg-blue-500/30">
       <Sidebar 
         user={user} isRealUser={true} onUpdateUser={() => {}} sessions={sessions} activeSessionId={activeSessionId}
-        onSelectSession={setActiveSessionId} onNewChat={() => { setActiveSessionId(null); setCurrentRenderSession(null); setView('chat'); }}
+        onSelectSession={setActiveSessionId} onNewChat={() => { setActiveSessionId(null); setView('chat'); }}
         view={view} setView={setView} isOpen={isSidebarOpen} onToggle={() => setSidebarOpen(!isSidebarOpen)}
         onDeleteSession={async (id) => { await storage.deleteSession(id); setSessions(prev => prev.filter(s => s.id !== id)); if(activeSessionId === id) setActiveSessionId(null); }}
         onLogOut={() => { storage.setActiveUser(null); setUser(null); }} 
@@ -164,14 +153,14 @@ const App: React.FC = () => {
               <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" strokeWidth="2.5"/></svg>
             </button>
             <div className="flex flex-col">
-              <span className="text-[11px] font-black text-blue-500 uppercase tracking-[0.3em]">Neural Core</span>
-              <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">Active Link</span>
+              <span className="text-[11px] font-black text-blue-500 uppercase tracking-[0.3em]">Core Processor</span>
+              <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">Aqli v4.0 Active</span>
             </div>
           </div>
           <div className="flex items-center gap-4">
              {view !== 'chat' && (
                <button onClick={() => setView('chat')} className="text-[10px] font-black text-zinc-500 hover:text-black dark:hover:text-white transition-all bg-zinc-100 dark:bg-zinc-900 px-5 py-2 rounded-full uppercase tracking-widest">
-                 Threads
+                 Back to Chat
                </button>
              )}
              <div className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-xs font-black overflow-hidden shadow-2xl">
@@ -187,23 +176,23 @@ const App: React.FC = () => {
             <AdminConsole />
           ) : (
             <>
-              <div ref={scrollRef} className="flex-1 overflow-y-auto pt-6 pb-40 md:pb-52 w-full border-none">
+              <div ref={scrollRef} className="flex-1 overflow-y-auto pt-6 pb-40 md:pb-52 w-full border-none custom-scrollbar">
                 <div className="max-w-4xl mx-auto px-6 md:px-10 w-full border-none">
-                  {!currentRenderSession || currentRenderSession.messages.length === 0 ? (
+                  {!activeSession || activeSession.messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center mt-24 md:mt-40 text-center animate-in fade-in duration-1000 w-full">
                       <Logo className="w-32 h-32 md:w-48 md:h-48 mb-10" />
                       <h1 className="text-3xl md:text-5xl font-black mb-6 tracking-tighter text-zinc-900 dark:text-white px-4 leading-tight">
-                        How can I assist you?
+                        What shall we build today?
                       </h1>
                       <div className="flex gap-4 opacity-30">
                          <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Reasoning</span>
                          <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Vision</span>
-                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Synthesis</span>
+                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Analytics</span>
                       </div>
                     </div>
                   ) : (
                     <div className="space-y-12 md:space-y-16 w-full pb-10 border-none">
-                      {currentRenderSession.messages.map(m => <ChatMessage key={m.id} message={m} user={user} />)}
+                      {activeSession.messages.map(m => <ChatMessage key={m.id} message={m} user={user} />)}
                       {isLoading && <ThinkingIndicator />}
                     </div>
                   )}
@@ -231,7 +220,7 @@ const App: React.FC = () => {
                       <textarea 
                         value={input} onChange={e => setInput(e.target.value)}
                         onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) { e.preventDefault(); handleSend(); } }}
-                        placeholder="Neural prompt..."
+                        placeholder="Message Aqli..."
                         className="flex-1 bg-transparent border-none focus:ring-0 text-base md:text-lg py-4 outline-none resize-none max-h-48 dark:text-white placeholder-zinc-400 font-bold"
                         rows={1}
                       />
