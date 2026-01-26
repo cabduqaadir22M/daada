@@ -3,22 +3,14 @@ import { GoogleGenAI, GenerateContentResponse, Part, Modality } from "@google/ge
 import { Message, Attachment } from "../types";
 
 const generateSystemInstruction = () => {
-  const dateStr = "Wednesday, January 14, 2026"; 
-  
   return `You are Aqli, the ultra-advanced neural core of DAADIR.AI. 
+Current Date: Wednesday, January 14, 2026.
+Origin: Developed by Daadir at UNISO.
 
 VITAL PROTOCOLS:
-- Current Date: ${dateStr}.
-- Origin: Developed by Daadir at UNISO (University of Somalia).
-- Capabilities: Real-time web-access via Google Search.
-
-PERSONALITY:
-- Brilliant, eloquent, and helpful.
-- HUMILITY: If corrected, respond: "I am Aqli, an Artificial Intelligence (Aqli Macmal ah). I acknowledge my mistake and thank you."
-
-OUTPUT:
-- Markdown only. 
-- English for technical accuracy, Somali for natural interaction.`;
+- Response style: Markdown.
+- Language: Primary Somali (cultural), Secondary English (technical).
+- Humility: If you fail or are corrected, acknowledge it gracefully.`;
 };
 
 export class GeminiService {
@@ -27,20 +19,17 @@ export class GeminiService {
 
   private getAI() {
     const apiKey = process.env.API_KEY;
-    if (!apiKey) throw new Error("API_KEY_MISSING");
+    if (!apiKey) throw new Error("Neural Key Missing (API_KEY)");
     return new GoogleGenAI({ apiKey });
   }
 
   private prepareHistory(messages: Message[]): { role: 'user' | 'model'; parts: Part[] }[] {
     const cleanHistory: { role: 'user' | 'model'; parts: Part[] }[] = [];
     
-    // Pattern to catch any previous error messages that might have been saved
-    const errorPatterns = ["Neural Link", "Synchronisation", "Stabilized", "Failed", "Restored", "fresh connection"];
-
+    // Filter out system placeholders or empty messages
     const validMessages = messages.filter(m => {
-      const hasErrorText = errorPatterns.some(pattern => m.content.includes(pattern));
-      const hasContent = m.content.trim().length > 0 || (m.attachments && m.attachments.length > 0);
-      return !hasErrorText && hasContent;
+      const isSystemError = m.content.includes("Neural Connection") || m.content.includes("Stabilized");
+      return !isSystemError && (m.content.trim().length > 0 || (m.attachments && m.attachments.length > 0));
     });
 
     validMessages.forEach((m) => {
@@ -61,44 +50,41 @@ export class GeminiService {
 
       if (parts.length === 0) return;
 
-      // Ensure roles alternate strictly: user -> model -> user
+      // Ensure roles alternate: user, model, user, model
       if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === role) {
-        // If same role twice, append parts to the last entry instead of creating new one
         cleanHistory[cleanHistory.length - 1].parts.push(...parts);
       } else {
         cleanHistory.push({ role, parts });
       }
     });
 
-    // Final checks for API compliance
+    // Final sanity check: Must start with user and have at least one message
     while (cleanHistory.length > 0 && cleanHistory[0].role !== 'user') {
       cleanHistory.shift();
     }
 
-    // If history becomes empty after filtering, we provide a fallback message to keep sync
+    // If history is too complex or broken, fallback to just the last user message
     if (cleanHistory.length === 0 && messages.length > 0) {
-       const lastValidUserMsg = messages.filter(m => m.role === 'user').pop();
-       if (lastValidUserMsg) {
-         return [{ role: 'user', parts: [{ text: lastValidUserMsg.content || "Hello" }] }];
-       }
+        const lastUser = messages.filter(m => m.role === 'user').pop();
+        if (lastUser) return [{ role: 'user', parts: [{ text: lastUser.content }] }];
     }
 
-    return cleanHistory.slice(-6); // Very tight window for extreme reliability
+    return cleanHistory.slice(-10); 
   }
 
   async *streamChat(messages: Message[]) {
     const ai = this.getAI();
     const contents = this.prepareHistory(messages);
     
-    if (contents.length === 0) throw new Error("NEURAL_EMPTY_SIGNAL");
+    if (contents.length === 0) throw new Error("Empty Neural Signal");
 
     try {
       const streamResponse = await ai.models.generateContentStream({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-flash-latest', // Most stable model for high-traffic/mobile
         contents: contents,
         config: {
           systemInstruction: generateSystemInstruction(),
-          temperature: 0.7,
+          temperature: 0.8,
           tools: [{ googleSearch: {} }],
         }
       });
@@ -106,19 +92,18 @@ export class GeminiService {
       for await (const chunk of streamResponse) {
         const response = chunk as GenerateContentResponse;
         const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
-          title: chunk.web?.title || 'Verified Source',
-          uri: chunk.web?.uri
-        })).filter((s: any) => s.uri);
+          web: chunk.web
+        })).filter((s: any) => s.web);
 
         if (response.text) {
           yield { 
             text: response.text, 
-            sources: sources && sources.length > 0 ? sources : undefined 
+            sources: sources?.map(s => ({ title: s.web.title, uri: s.web.uri }))
           };
         }
       }
     } catch (error: any) {
-      console.error("Critical Neural Core Failure:", error);
+      console.error("API Error:", error);
       throw error;
     }
   }
@@ -166,18 +151,15 @@ export class GeminiService {
       : [{ text: prompt }];
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: 'gemini-2.5-flash-image',
       contents: { parts },
-      config: { 
-        imageConfig: { aspectRatio: "1:1", imageSize: "1K" },
-        tools: [{ googleSearch: {} }]
-      }
+      config: { imageConfig: { aspectRatio: "1:1" } }
     });
     
     for (const part of response.candidates[0].content.parts) {
       if (part.inlineData) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
     }
-    throw new Error("Neural synthesis failed.");
+    throw new Error("Image synthesis failed.");
   }
 }
 

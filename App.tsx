@@ -21,6 +21,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
+  const [errorStatus, setErrorStatus] = useState<string | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -53,10 +54,12 @@ const App: React.FC = () => {
     scrollToBottom();
   }, [activeSession?.messages.length, isLoading, view]);
 
-  const handleSend = async () => {
-    const trimmedInput = input.trim();
+  const handleSend = async (overrideInput?: string) => {
+    const textToSend = overrideInput || input;
+    const trimmedInput = textToSend.trim();
     if ((!trimmedInput && attachments.length === 0) || isLoading || !user) return;
 
+    setErrorStatus(null);
     let sId = activeSessionId;
     let session = activeSession;
 
@@ -77,7 +80,7 @@ const App: React.FC = () => {
     const userMsg: Message = {
       id: `msg_user_${Date.now()}`,
       role: 'user',
-      content: trimmedInput || "Establishing sync...",
+      content: trimmedInput,
       timestamp: Date.now(),
       attachments: attachments.length > 0 ? [...attachments] : undefined
     };
@@ -85,7 +88,7 @@ const App: React.FC = () => {
     const assistantId = `msg_ai_${Date.now()}`;
     const assistantPlaceholder: Message = { id: assistantId, role: 'assistant', content: '', timestamp: Date.now() + 1 };
     
-    // UI Update (Optimistic)
+    // Add messages locally
     setSessions(prev => prev.map(s => s.id === sId ? { ...s, messages: [...s.messages, userMsg, assistantPlaceholder], updatedAt: Date.now() } : s));
     
     const previousInput = input;
@@ -94,8 +97,8 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const historyForAPI = [...session.messages, userMsg];
-      const stream = geminiService.streamChat(historyForAPI);
+      // Logic: Send ONLY userMsg if the previous interaction failed to prevent "bad history"
+      const stream = geminiService.streamChat([...session.messages, userMsg]);
       let fullContent = '';
       let finalSources: any[] = [];
 
@@ -112,27 +115,20 @@ const App: React.FC = () => {
         }));
       }
 
-      const finalSession = { 
-        ...session, 
-        messages: [...session.messages, userMsg, { ...assistantPlaceholder, content: fullContent, sources: finalSources } as any],
-        updatedAt: Date.now()
-      };
-      await storage.saveSession(finalSession);
+      // Final save
+      const updatedMessages = [...session.messages, userMsg, { ...assistantPlaceholder, content: fullContent, sources: finalSources } as any];
+      await storage.saveSession({ ...session, messages: updatedMessages, updatedAt: Date.now() });
     } catch (e: any) {
-      console.error("Neural Signal Fault:", e);
+      console.error("Neural Sync Error:", e);
+      setErrorStatus("Connection Timed Out. Please retry.");
       
-      // CRITICAL: We DO NOT save this error state to storage. 
-      // We only update the local state to inform the user.
+      // Clean UI: Remove the empty assistant placeholder if failed
       setSessions(prev => prev.map(s => s.id === sId ? { 
         ...s, 
-        messages: s.messages.map(m => m.id === assistantId ? { 
-          ...m, 
-          content: "Neural Connection Stabilized. The previous link was too weak. Please resend your message now - Aqli is ready." 
-        } : m) 
+        messages: s.messages.filter(m => m.id !== assistantId) 
       } : s));
       
-      // Optional: Restore input so user doesn't have to retype
-      if (!input) setInput(previousInput);
+      setInput(previousInput); // Restore input for retry
     } finally {
       setIsLoading(false);
     }
@@ -158,14 +154,14 @@ const App: React.FC = () => {
               <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" strokeWidth="2.5"/></svg>
             </button>
             <div className="flex flex-col border-none">
-              <span className="text-[11px] font-black text-blue-500 uppercase tracking-[0.3em]">DAADIR NEURAL CORE</span>
-              <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">v10.0.0 &bull; Grounded 2026</span>
+              <span className="text-[11px] font-black text-blue-500 uppercase tracking-[0.3em]">DAADIR STABLE CORE</span>
+              <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">v11.0.4 &bull; Global Sync</span>
             </div>
           </div>
           <div className="flex items-center gap-4 border-none">
              {view !== 'chat' && (
                <button onClick={() => setView('chat')} className="text-[10px] font-black text-zinc-500 hover:text-black dark:hover:text-white transition-all bg-zinc-100 dark:bg-zinc-900 px-6 py-2 rounded-full uppercase tracking-widest border-none">
-                 BACK TO CORE
+                 EXIT VISION
                </button>
              )}
              <div className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-xs font-black overflow-hidden shadow-2xl border-none">
@@ -181,24 +177,35 @@ const App: React.FC = () => {
             <AdminConsole />
           ) : (
             <>
-              <div ref={scrollRef} className="flex-1 overflow-y-auto pt-6 pb-40 md:pb-52 w-full custom-scrollbar scroll-smooth border-none">
+              <div ref={scrollRef} className="flex-1 overflow-y-auto pt-6 pb-44 md:pb-56 w-full custom-scrollbar scroll-smooth border-none">
                 <div className="max-w-4xl mx-auto px-6 md:px-10 w-full border-none">
                   {!activeSession || activeSession.messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center mt-24 md:mt-40 text-center animate-in fade-in duration-1000 w-full border-none">
                       <Logo className="w-32 h-32 md:w-40 md:h-40 mb-10" hideText={false} />
                       <h1 className="text-3xl md:text-5xl font-black mb-6 tracking-tighter text-zinc-900 dark:text-white px-4 leading-tight border-none">
-                        Intelligence Unbound.
+                        Stable Somali AI.
                       </h1>
                       <div className="flex gap-4 opacity-30 border-none">
-                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Pure Somali</span>
-                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Neural Grounding</span>
-                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">2026 Ready</span>
+                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Auto Recovery</span>
+                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Real-time News</span>
+                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">UNISO Core</span>
                       </div>
                     </div>
                   ) : (
                     <div className="w-full pb-10 flex flex-col border-none">
                       {activeSession.messages.map(m => <ChatMessage key={m.id} message={m} user={user} />)}
                       {isLoading && <ThinkingIndicator />}
+                      {errorStatus && (
+                        <div className="flex flex-col items-center gap-4 my-8 animate-in zoom-in duration-300">
+                          <p className="text-[10px] font-black text-red-500 uppercase tracking-widest bg-red-500/10 px-6 py-2 rounded-full border border-red-500/20">{errorStatus}</p>
+                          <button 
+                            onClick={() => handleSend()}
+                            className="bg-zinc-900 dark:bg-white text-white dark:text-black text-[10px] font-black uppercase tracking-widest px-8 py-3 rounded-full hover:scale-105 transition-all shadow-xl"
+                          >
+                            Re-establish Sync
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -217,7 +224,7 @@ const App: React.FC = () => {
                           const reader = new FileReader();
                           reader.onload = (ev) => {
                             const base64 = (ev.target?.result as string).split(',')[1];
-                            setAttachments(prev => [...prev, { id: Date.now().toString(), type: file.type.startsWith('image/') ? 'image' : 'file', mimeType: file.type, data: base64, name: file.name }]);
+                            setAttachments(prev => [...prev, { id: Date.now().toString(), type: 'image', mimeType: file.type, data: base64, name: file.name }]);
                           };
                           reader.readAsDataURL(file);
                         });
@@ -225,11 +232,11 @@ const App: React.FC = () => {
                       <textarea 
                         value={input} onChange={e => setInput(e.target.value)}
                         onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) { e.preventDefault(); handleSend(); } }}
-                        placeholder="Establish link..."
+                        placeholder="Ask Aqli anything..."
                         className="flex-1 bg-transparent border-none focus:ring-0 text-base md:text-lg py-4 outline-none resize-none max-h-48 dark:text-white placeholder-zinc-400 font-bold"
                         rows={1}
                       />
-                      <button onClick={handleSend} disabled={isLoading || (!input.trim() && attachments.length === 0)} className="w-14 h-14 md:w-16 md:h-16 flex items-center justify-center bg-blue-600 text-white rounded-[1.8rem] disabled:opacity-20 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-blue-600/30 border-none">
+                      <button onClick={() => handleSend()} disabled={isLoading || (!input.trim() && attachments.length === 0)} className="w-14 h-14 md:w-16 md:h-16 flex items-center justify-center bg-blue-600 text-white rounded-[1.8rem] disabled:opacity-20 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-blue-600/30 border-none">
                         <svg className="w-7 h-7 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       </button>
                     </div>
