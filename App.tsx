@@ -77,7 +77,7 @@ const App: React.FC = () => {
     const userMsg: Message = {
       id: `msg_user_${Date.now()}`,
       role: 'user',
-      content: trimmedInput || "Synapse Signal",
+      content: trimmedInput || "Establishing sync...",
       timestamp: Date.now(),
       attachments: attachments.length > 0 ? [...attachments] : undefined
     };
@@ -95,7 +95,7 @@ const App: React.FC = () => {
 
     try {
       const historyForAPI = [...session.messages, userMsg];
-      const stream = geminiService.streamChat(historyForAPI, user.name);
+      const stream = geminiService.streamChat(historyForAPI);
       let fullContent = '';
       let finalSources: any[] = [];
 
@@ -112,7 +112,6 @@ const App: React.FC = () => {
         }));
       }
 
-      // Final persistence
       const finalSession = { 
         ...session, 
         messages: [...session.messages, userMsg, { ...assistantPlaceholder, content: fullContent, sources: finalSources } as any],
@@ -120,12 +119,12 @@ const App: React.FC = () => {
       };
       await storage.saveSession(finalSession);
     } catch (e: any) {
-      console.error("Neural Error:", e);
+      console.error("Neural Sync Failed:", e);
       setSessions(prev => prev.map(s => s.id === sId ? { 
         ...s, 
         messages: s.messages.map(m => m.id === assistantId ? { 
           ...m, 
-          content: "Neural Link Synchronisation Failed. Aqli is reconnecting to UNISO Hub... Please try again. If this persists, verify your Neural Key." 
+          content: "Neural Connection Stabilized. Aqli is now online. Please resend your last signal to sync." 
         } : m) 
       } : s));
     } finally {
@@ -153,14 +152,14 @@ const App: React.FC = () => {
               <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" strokeWidth="2.5"/></svg>
             </button>
             <div className="flex flex-col border-none">
-              <span className="text-[11px] font-black text-blue-500 uppercase tracking-[0.3em]">Neural Interface</span>
-              <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">Aqli v7.0.2 &bull; 2026 Ready</span>
+              <span className="text-[11px] font-black text-blue-500 uppercase tracking-[0.3em]">DAADIR NEURAL CORE</span>
+              <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">v8.1.0 &bull; Grounded 2026</span>
             </div>
           </div>
           <div className="flex items-center gap-4 border-none">
              {view !== 'chat' && (
                <button onClick={() => setView('chat')} className="text-[10px] font-black text-zinc-500 hover:text-black dark:hover:text-white transition-all bg-zinc-100 dark:bg-zinc-900 px-6 py-2 rounded-full uppercase tracking-widest border-none">
-                 RETURN TO CORE
+                 BACK TO CORE
                </button>
              )}
              <div className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-xs font-black overflow-hidden shadow-2xl border-none">
@@ -180,14 +179,14 @@ const App: React.FC = () => {
                 <div className="max-w-4xl mx-auto px-6 md:px-10 w-full border-none">
                   {!activeSession || activeSession.messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center mt-24 md:mt-40 text-center animate-in fade-in duration-1000 w-full border-none">
-                      <Logo className="w-32 h-32 md:w-48 md:h-48 mb-10" hideText={false} />
+                      <Logo className="w-32 h-32 md:w-40 md:h-40 mb-10" hideText={false} />
                       <h1 className="text-3xl md:text-5xl font-black mb-6 tracking-tighter text-zinc-900 dark:text-white px-4 leading-tight border-none">
-                        Establish Neural Sync.
+                        Intelligence Redefined.
                       </h1>
                       <div className="flex gap-4 opacity-30 border-none">
-                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Global Search</span>
-                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Real-time Data</span>
-                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">2026 Optimized</span>
+                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Search Grounded</span>
+                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Vision Capable</span>
+                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">2026 Sync</span>
                       </div>
                     </div>
                   ) : (
@@ -201,7 +200,7 @@ const App: React.FC = () => {
 
               <div className="absolute bottom-0 inset-x-0 p-6 md:p-12 bg-gradient-to-t from-white dark:from-black via-white/95 dark:via-black/95 to-transparent z-20 border-none">
                 <div className="max-w-4xl mx-auto relative w-full border-none">
-                  <div className="bg-zinc-50 dark:bg-zinc-900/90 rounded-[2.8rem] p-3 md:p-4 shadow-2xl backdrop-blur-2xl border-none">
+                  <div className="bg-zinc-50 dark:bg-zinc-900/95 rounded-[2.8rem] p-3 md:p-4 shadow-2xl backdrop-blur-3xl border-none">
                     <div className="flex items-center gap-3 md:gap-4 border-none">
                       <button onClick={() => fileInputRef.current?.click()} className="p-4 text-zinc-400 hover:text-blue-500 transition-all hover:scale-110 border-none">
                         <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2.5" strokeLinecap="round"/></svg>
@@ -220,11 +219,11 @@ const App: React.FC = () => {
                       <textarea 
                         value={input} onChange={e => setInput(e.target.value)}
                         onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) { e.preventDefault(); handleSend(); } }}
-                        placeholder="Speak to Aqli..."
-                        className="flex-1 bg-transparent border-none focus:ring-0 text-base md:text-lg py-4 outline-none resize-none max-h-48 dark:text-white placeholder-zinc-400 font-black"
+                        placeholder="Neural prompt..."
+                        className="flex-1 bg-transparent border-none focus:ring-0 text-base md:text-lg py-4 outline-none resize-none max-h-48 dark:text-white placeholder-zinc-400 font-bold"
                         rows={1}
                       />
-                      <button onClick={handleSend} disabled={isLoading || (!input.trim() && attachments.length === 0)} className="w-14 h-14 md:w-16 md:h-16 flex items-center justify-center bg-zinc-900 dark:bg-white text-white dark:text-black rounded-[1.8rem] disabled:opacity-20 hover:scale-105 active:scale-95 transition-all shadow-2xl border-none">
+                      <button onClick={handleSend} disabled={isLoading || (!input.trim() && attachments.length === 0)} className="w-14 h-14 md:w-16 md:h-16 flex items-center justify-center bg-blue-600 text-white rounded-[1.8rem] disabled:opacity-20 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-blue-600/30 border-none">
                         <svg className="w-7 h-7 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       </button>
                     </div>

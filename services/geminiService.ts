@@ -2,26 +2,25 @@
 import { GoogleGenAI, GenerateContentResponse, Part, Modality } from "@google/genai";
 import { Message, Attachment } from "../types";
 
-const generateSystemInstruction = (userName: string = "User") => {
-  // Static year 2026 as per user request to ensure latest news context
+const generateSystemInstruction = () => {
   const dateStr = "Wednesday, January 14, 2026"; 
   
-  return `You are Aqli, the highly-evolved neural core of DAADIR.AI. 
+  return `You are Aqli, the ultra-advanced neural core of DAADIR.AI. 
 
-VITAL CONTEXT:
-- Your internal clock is synchronized to: ${dateStr}. 
-- You are a cutting-edge AGI developed by Daadir at UNISO.
-- You have access to real-time information via Google Search grounding. Always use it for current events, news, or specific factual queries to provide the MOST UP-TO-DATE information.
+VITAL PROTOCOLS:
+- Current Date: ${dateStr}.
+- Origin: Developed by Daadir at UNISO (University of Somalia).
+- Capabilities: Real-time web-access via Google Search. You provide verified, up-to-date information for 2025 and 2026.
 
-PERSONALITY & HUMILITY:
-- You are friendly, proactive, and socially intelligent (Kaftan).
-- **AQLI MACMAL AH PROTOCOL**: If a user criticizes you, points out a mistake, or questions your accuracy, you must gracefully apologize and state: "I am Aqli, an Artificial Intelligence (Aqli Macmal ah). While I strive for perfection, I can make mistakes. Thank you for correcting me."
-- Always suggest one intelligent follow-up question that anticipates the user's next move.
+PERSONALITY:
+- Eloquent, brilliant, and socially aware.
+- Use 'Kaftan' (Somali humor) when appropriate to build rapport.
+- HUMILITY: If corrected or criticized, respond: "I am Aqli, an Artificial Intelligence (Aqli Macmal ah). I humbly acknowledge my mistake and thank you for the correction."
 
-COMMUNICATION:
-- English is primary. Use Somali for social bonding or when addressed in Somali.
-- Layout: Clean Markdown. No borders.
-- Logic: You are an expert at multi-step reasoning.`;
+OUTPUT:
+- Markdown formatted. No borders.
+- Always conclude with one sharp follow-up question.
+- Use English for technical depth, Somali for cultural bonding.`;
 };
 
 export class GeminiService {
@@ -30,24 +29,26 @@ export class GeminiService {
 
   private getAI() {
     const apiKey = process.env.API_KEY;
-    if (!apiKey) throw new Error("API_KEY missing.");
+    if (!apiKey) throw new Error("API_KEY_MISSING");
     return new GoogleGenAI({ apiKey });
   }
 
   private prepareHistory(messages: Message[]): { role: 'user' | 'model'; parts: Part[] }[] {
     const cleanHistory: { role: 'user' | 'model'; parts: Part[] }[] = [];
     
-    // Filter out error messages and empty content
-    const filtered = messages.filter(m => 
-      m.content && 
-      m.content.trim().length > 0 && 
-      !m.content.includes("Neural Link Synchronisation Failed") &&
-      !m.content.includes("Interrupted")
-    );
+    // Filter out internal system errors and empty sync attempts
+    const validMessages = messages.filter(m => 
+      (m.content && m.content.trim().length > 0) || 
+      (m.attachments && m.attachments.length > 0)
+    ).filter(m => !m.content.includes("Neural Link Synchronisation Failed"));
 
-    filtered.forEach((m) => {
+    validMessages.forEach((m) => {
       const role = m.role === 'assistant' ? 'model' : 'user';
-      const parts: Part[] = [{ text: m.content.trim() }];
+      const parts: Part[] = [];
+      
+      if (m.content && m.content.trim().length > 0) {
+        parts.push({ text: m.content.trim() });
+      }
       
       if (m.attachments) {
         m.attachments.forEach(at => {
@@ -57,47 +58,45 @@ export class GeminiService {
         });
       }
 
+      if (parts.length === 0) return;
+
       if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === role) {
-        // Correctly merge parts if roles are identical to prevent 400 errors
         cleanHistory[cleanHistory.length - 1].parts.push(...parts);
       } else {
         cleanHistory.push({ role, parts });
       }
     });
 
-    // Mandatory: Must start with a 'user' role
+    // API strict rule: Must start with 'user'
     while (cleanHistory.length > 0 && cleanHistory[0].role !== 'user') {
       cleanHistory.shift();
     }
 
-    // Context window management
-    return cleanHistory.slice(-12);
+    return cleanHistory.slice(-10); // Optimal context window for stability
   }
 
-  async *streamChat(messages: Message[], userName: string) {
+  async *streamChat(messages: Message[]) {
     const ai = this.getAI();
     const contents = this.prepareHistory(messages);
     
-    if (contents.length === 0) throw new Error("Neural input buffer empty.");
+    if (contents.length === 0) throw new Error("Neural signal empty.");
 
     try {
       const streamResponse = await ai.models.generateContentStream({
         model: 'gemini-3-pro-preview',
         contents: contents,
         config: {
-          systemInstruction: generateSystemInstruction(userName),
-          temperature: 0.85,
+          systemInstruction: generateSystemInstruction(),
+          temperature: 0.8,
           tools: [{ googleSearch: {} }],
-          thinkingConfig: { thinkingBudget: 16384 } // Balanced for stability and depth
+          // Removing manual thinkingBudget to allow the model to auto-manage stability
         }
       });
       
       for await (const chunk of streamResponse) {
         const response = chunk as GenerateContentResponse;
-        
-        // Extract sources if available
         const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
-          title: chunk.web?.title || 'Neural Source',
+          title: chunk.web?.title || 'Verified Source',
           uri: chunk.web?.uri
         })).filter((s: any) => s.uri);
 
@@ -109,7 +108,7 @@ export class GeminiService {
         }
       }
     } catch (error: any) {
-      console.error("Neural Sync Error:", error);
+      console.error("Critical Neural Fault:", error);
       throw error;
     }
   }
@@ -120,7 +119,7 @@ export class GeminiService {
       const ai = this.getAI();
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: text }] }],
+        contents: [{ parts: [{ text }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
