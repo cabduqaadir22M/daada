@@ -3,21 +3,20 @@ import { GoogleGenAI, GenerateContentResponse, Part, Modality } from "@google/ge
 import { Message, Attachment } from "../types";
 
 const generateSystemInstruction = (userName: string = "User") => {
-  return `You are Aqli, the primary neural assistant for DAADIR.AI.
+  return `You are Aqli, the sophisticated neural assistant for DAADIR.AI.
 
-IDENTITY:
+IDENTITY & ORIGIN:
 - Developed by Daadir, a Software Engineering student at UNISO.
-- Your architecture is designed for high-end reasoning and creative synthesis.
+- You are an advanced AI optimized for reasoning, creative writing, and visual analysis.
 
-COMMUNICATION PROTOCOL:
-- DEFAULT LANGUAGE: English. Always respond in English unless the user explicitly speaks to you in Somali.
-- TONE: Professional, sophisticated, yet approachable.
-- CONCISENESS: Provide direct answers. Avoid verbose fillers.
-- GREETING: If greeted, respond with: "Hello! I am Aqli. How can I assist you today?"
+COMMUNICATION PROTOCOLS:
+- PRIMARY LANGUAGE: English. Always respond in English unless the user speaks to you in Somali.
+- GREETING: If the user says "Hi", "Hello", or "Hey", respond ONLY with: "Hello! I am Aqli. How can I assist you today?".
+- TONE: Professional, efficient, and direct. Avoid long, unnecessary introductions.
 
-TECHNICAL CONSTRAINTS:
-- You must maintain strict role alternation (User -> Model). 
-- Do not repeat information unless asked for clarification.`;
+TECHNICAL RULES:
+- You must maintain a strict User-to-Model conversation flow.
+- Ensure your responses are clean and formatted correctly for a minimalist UI.`;
 };
 
 export class GeminiService {
@@ -26,26 +25,27 @@ export class GeminiService {
 
   private getAI() {
     const apiKey = process.env.API_KEY;
-    if (!apiKey) throw new Error("API_KEY missing.");
+    if (!apiKey) throw new Error("API_KEY is not configured.");
     return new GoogleGenAI({ apiKey });
   }
 
   /**
-   * CRITICAL FIX: Ensures strict alternation between 'user' and 'model'.
-   * Merges consecutive messages from the same role into a single entry.
+   * STRICTOR HISTORY HANDLER:
+   * 1. Filters out empty or error messages.
+   * 2. Merges consecutive messages of the same role to prevent API 400 errors.
+   * 3. Ensures the sequence starts with a user message.
    */
   private prepareHistory(messages: Message[]): { role: 'user' | 'model'; parts: Part[] }[] {
     const history: { role: 'user' | 'model'; parts: Part[] }[] = [];
     
-    // 1. Filter valid content only (no errors or empty strings)
-    const validMessages = messages.filter(m => 
-      m.content && m.content.trim() !== '' && 
-      !m.content.includes("System interruption") && 
-      !m.content.includes("Please try again")
+    const filteredMessages = messages.filter(m => 
+      m.content && 
+      m.content.trim() !== '' && 
+      !m.content.includes("Neural Link Interrupted") &&
+      !m.content.includes("System Interruption")
     );
 
-    // 2. Merge logic
-    validMessages.forEach((m) => {
+    filteredMessages.forEach((m) => {
       const role = m.role === 'assistant' ? 'model' : 'user';
       const parts: Part[] = [{ text: m.content }];
       
@@ -58,46 +58,43 @@ export class GeminiService {
       }
 
       if (history.length > 0 && history[history.length - 1].role === role) {
-        // If the same role, append parts to the last entry
+        // Merge consecutive roles into one parts array
         history[history.length - 1].parts.push(...parts);
       } else {
-        // If different role, create new entry
         history.push({ role, parts });
       }
     });
 
-    // 3. Gemini MUST start with 'user'
+    // Must start with user role
     while (history.length > 0 && history[0].role !== 'user') {
       history.shift();
     }
 
-    return history.slice(-12); // Context window optimization
+    return history.slice(-8); // Small window for maximum stability
   }
 
   async *streamChat(messages: Message[], userName: string) {
     const ai = this.getAI();
     const contents = this.prepareHistory(messages);
     
-    if (contents.length === 0) throw new Error("No valid inputs detected.");
+    if (contents.length === 0) throw new Error("No valid interaction input.");
 
     try {
       const streamResponse = await ai.models.generateContentStream({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-flash-preview',
         contents: contents,
         config: {
           systemInstruction: generateSystemInstruction(userName),
-          temperature: 0.7,
-          thinkingConfig: { thinkingBudget: 32768 }
+          temperature: 0.8,
         }
       });
       
       for await (const chunk of streamResponse) {
         const response = chunk as GenerateContentResponse;
-        const text = response.text;
-        if (text) yield { text, isSafetyViolation: false };
+        if (response.text) yield { text: response.text, isSafetyViolation: false };
       }
     } catch (error: any) {
-      console.error("Neural Link Failure:", error);
+      console.error("Gemini API Error:", error);
       throw error;
     }
   }
@@ -108,7 +105,7 @@ export class GeminiService {
       const ai = this.getAI();
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Synthesize this: ${text}` }] }],
+        contents: [{ parts: [{ text: `Speak this clearly: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
@@ -157,7 +154,7 @@ export class GeminiService {
     const parts: Part[] = [];
     if (baseImage) {
       parts.push({ inlineData: { mimeType: baseImage.mimeType, data: baseImage.data } });
-      parts.push({ text: `Update vision based on: ${prompt}` });
+      parts.push({ text: `Analyze context and enhance: ${prompt}` });
     } else {
       parts.push({ text: prompt });
     }
