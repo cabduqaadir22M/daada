@@ -4,19 +4,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>DAADIR.AI | Somali Intelligence Redefined</title>
+    <title>DAADIR.AI | Intelligence Redefined</title>
     
     <!-- SEO Meta Tags -->
-    <meta name="description" content="DAADIR.AI - The advanced Somali AI platform for deep reasoning, vision, and creative intelligence. Local-first and private.">
-    <meta name="keywords" content="AI, Daadir, Aqli, Somali AI, Intelligence, Reasoning, Vision, UNISO, Somalia Software Engineer">
+    <meta name="description" content="DAADIR.AI - Advanced neural reasoning, vision, and creative intelligence. Built by Daadir.">
+    <meta name="keywords" content="AI, Daadir, Aqli, Intelligence, Reasoning, Vision, UNISO">
     <meta name="author" content="Daadir">
-
-    <!-- Social Media Sharing -->
-    <meta property="og:title" content="DAADIR.AI | The Future of Somali Intelligence">
-    <meta property="og:description" content="Experience advanced neural reasoning and vision in a beautiful, private interface. Built by Daadir.">
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://daadir.is-a.dev">
-    <meta property="og:image" content="https://daadir.42web.io/og-image.png">
 
     <!-- Mobile App Settings -->
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -46,23 +39,28 @@
         transition: background-color 0.3s ease;
       }
 
+      /* GLOBAL SCROLLBAR REMOVAL */
       * {
-        scrollbar-width: none !important; /* Firefox */
-        -ms-overflow-style: none !important; /* IE/Edge */
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        border-color: transparent !important;
+        outline-color: transparent !important;
       }
       
       *::-webkit-scrollbar {
-        display: none !important; /* Chrome/Safari */
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
       }
 
-      input::-webkit-outer-spin-button,
-      input::-webkit-inner-spin-button {
-        -webkit-appearance: none !important;
-        margin: 0 !important;
+      /* Exception for essential interactive elements */
+      input, textarea, button {
+        border: none !important;
+        outline: none !important;
       }
-      
-      textarea {
-        resize: none !important;
+
+      .border-none {
+        border: none !important;
       }
 
       #root {
@@ -83,7 +81,7 @@
 
       @keyframes neural-pulse {
         0%, 100% { opacity: 1; transform: scale(1); filter: blur(0); }
-        50% { opacity: 0.5; transform: scale(0.92); filter: blur(2px); }
+        50% { opacity: 0.5; transform: scale(0.95); filter: blur(3px); }
       }
       .animate-loader {
         animation: neural-pulse 2.5s infinite ease-in-out;
@@ -113,7 +111,7 @@
             <rect x="120" y="195" width="45" height="10" fill="#000" />
           </svg>
         </div>
-        <div style="margin-top: 48px; font-weight: 900; font-size: 16px; letter-spacing: 1.2em; color: #fff; text-indent: 1.2em; text-transform: uppercase; opacity: 0.6;">DAADIR</div>
+        <div style="margin-top: 48px; font-weight: 900; font-size: 14px; letter-spacing: 1.2em; color: #fff; text-indent: 1.2em; text-transform: uppercase; opacity: 0.4;">NEURAL CORE</div>
       </div>
     </div>
     <script type="module" src="/index.tsx"></script>

@@ -3,20 +3,20 @@ import { GoogleGenAI, GenerateContentResponse, Part, Modality } from "@google/ge
 import { Message, Attachment } from "../types";
 
 const generateSystemInstruction = (userName: string = "User") => {
-  return `You are Aqli, a highly intelligent and friendly neural assistant for DAADIR.AI.
+  return `You are Aqli, a highly advanced and professional neural assistant for DAADIR.AI.
 
-CORE BEHAVIOR:
-- Default language is English. Respond in English unless the user speaks to you in Somali.
-- Be concise, helpful, and balanced. Avoid extremely long responses unless requested.
-- If the user says "Hi", "Hello", or similar, respond ONLY with: "Hi, how can I help you today?".
+CORE PROTOCOLS:
+- Primary Language: English. Always respond in English unless the user explicitly initiates a conversation in Somali.
+- Tone: Professional, helpful, and concise. Avoid redundant explanations.
+- Greeting: If greeted with "Hi", "Hello", or "Hey", reply only with: "Hello! How can I assist you today?".
 
-IDENTITY:
-- Developed by Daadir, a Software Engineering student at UNISO.
-- You are powered by advanced neural models and Python-based logic.
+ORIGIN & IDENTITY:
+- You were developed by Daadir, a Software Engineering student at the University of Somalia (UNISO).
+- You utilize a neural architecture optimized for deep reasoning and creative vision.
 
-HISTORY CONSTRAINTS:
-- You must strictly alternate between User and Model roles.
-- Never repeat the same role twice in a row.`;
+STRICT RULES:
+- Never repeat the same role consecutively (User must be followed by Model).
+- If history is corrupted, prioritize the most recent user request.`;
 };
 
 export class GeminiService {
@@ -25,54 +25,54 @@ export class GeminiService {
 
   private getAI() {
     const apiKey = process.env.API_KEY;
-    if (!apiKey) throw new Error("API_KEY is missing.");
+    if (!apiKey) throw new Error("API_KEY is missing from environment.");
     return new GoogleGenAI({ apiKey });
   }
 
   private prepareHistory(messages: Message[]): { role: 'user' | 'model'; parts: Part[] }[] {
     const history: { role: 'user' | 'model'; parts: Part[] }[] = [];
     
-    // Filter out errors and empty messages
+    // Clean history: Remove empty messages and error placeholders
     const validMessages = messages.filter(m => 
       m.content && 
       m.content.trim() !== '' && 
       !m.content.includes("System interruption") &&
-      !m.content.includes("Fadlan dib isku day")
+      !m.content.includes("Please try again")
     );
 
     validMessages.forEach((m) => {
       const role = m.role === 'assistant' ? 'model' : 'user';
       const parts: Part[] = [{ text: m.content }];
       
-      m.attachments?.forEach(at => {
-        if (at.data) {
-          parts.push({ inlineData: { mimeType: at.mimeType, data: at.data } });
-        }
-      });
+      if (m.attachments) {
+        m.attachments.forEach(at => {
+          if (at.data) {
+            parts.push({ inlineData: { mimeType: at.mimeType, data: at.data } });
+          }
+        });
+      }
 
       if (history.length > 0 && history[history.length - 1].role === role) {
-        // Merge with previous if same role to maintain strict alternation
+        // Strict Alternation: Merge consecutive same-role messages
         history[history.length - 1].parts.push(...parts);
       } else {
         history.push({ role, parts });
       }
     });
 
-    // Gemini MUST start with user
+    // Gemini API requires the first message to be from 'user'
     while (history.length > 0 && history[0].role !== 'user') {
       history.shift();
     }
 
-    return history.slice(-15); // Smaller window for better reliability
+    return history.slice(-10); // Keep context window lean for better stability
   }
 
   async *streamChat(messages: Message[], userName: string) {
     const ai = this.getAI();
     const contents = this.prepareHistory(messages);
     
-    if (contents.length === 0) {
-      throw new Error("No valid messages to send.");
-    }
+    if (contents.length === 0) throw new Error("No valid interaction history found.");
 
     try {
       const streamResponse = await ai.models.generateContentStream({
@@ -80,18 +80,19 @@ export class GeminiService {
         contents: contents,
         config: {
           systemInstruction: generateSystemInstruction(userName),
-          temperature: 0.8,
+          temperature: 0.7,
           thinkingConfig: { thinkingBudget: 32768 }
         }
       });
       
       for await (const chunk of streamResponse) {
         const response = chunk as GenerateContentResponse;
-        const text = response.text;
-        if (text) yield { text, isSafetyViolation: false };
+        if (response.text) {
+          yield { text: response.text, isSafetyViolation: false };
+        }
       }
     } catch (error: any) {
-      console.error("Gemini stream error:", error);
+      console.error("Neural Link Error:", error);
       throw error;
     }
   }
@@ -102,7 +103,7 @@ export class GeminiService {
       const ai = this.getAI();
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Read this text clearly: ${text}` }] }],
+        contents: [{ parts: [{ text: `Synthesize speech for: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
@@ -151,7 +152,7 @@ export class GeminiService {
     const parts: Part[] = [];
     if (baseImage) {
       parts.push({ inlineData: { mimeType: baseImage.mimeType, data: baseImage.data } });
-      parts.push({ text: `Update image based on: ${prompt}` });
+      parts.push({ text: `Analyze context and synthesize: ${prompt}` });
     } else {
       parts.push({ text: prompt });
     }
@@ -167,7 +168,7 @@ export class GeminiService {
         if (part.inlineData) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
       }
     }
-    throw new Error("Failed to generate image.");
+    throw new Error("Neural synthesis failed.");
   }
 }
 
