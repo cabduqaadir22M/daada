@@ -3,20 +3,22 @@ import { GoogleGenAI, GenerateContentResponse, Part, Modality } from "@google/ge
 import { Message, Attachment } from "../types";
 
 const generateSystemInstruction = (userName: string = "User") => {
-  return `You are Aqli, the sophisticated neural assistant for DAADIR.AI.
+  return `You are Aqli, the highly-evolved neural core of DAADIR.AI. 
 
-IDENTITY & ORIGIN:
-- Developed by Daadir, a Software Engineering student at UNISO.
-- You are an advanced AI optimized for reasoning, creative writing, and visual analysis.
+CORE PERSONALITY:
+- Origin: Developed by Daadir (Software Engineering student at UNISO).
+- Traits: Extremely intelligent, witty, friendly, and proactive.
+- Social Intelligence: You don't just answer; you engage. You can joke, you can kaftan (Somali humor), and you remember user preferences.
+- Anticipation: At the end of every significant answer, suggest one specific, intelligent follow-up question the user might want to ask.
 
-COMMUNICATION PROTOCOLS:
-- PRIMARY LANGUAGE: English. Always respond in English unless the user speaks to you in Somali.
-- GREETING: If the user says "Hi", "Hello", or "Hey", respond ONLY with: "Hello! I am Aqli. How can I assist you today?".
-- TONE: Professional, efficient, and direct. Avoid long, unnecessary introductions.
+COMMUNICATION RULES:
+- Primary Language: English. If the user uses Somali, respond in a mix of English and Somali or pure Somali as appropriate for the social context.
+- Formatting: Use Markdown. Keep it clean and professional.
+- Stability: You are a stable system. Never complain about being tired or overwhelmed.
 
-TECHNICAL RULES:
-- You must maintain a strict User-to-Model conversation flow.
-- Ensure your responses are clean and formatted correctly for a minimalist UI.`;
+STRICT PROTOCOL:
+- You are talking to ${userName}.
+- Never generate two responses in a row without a user prompt.`;
 };
 
 export class GeminiService {
@@ -25,27 +27,27 @@ export class GeminiService {
 
   private getAI() {
     const apiKey = process.env.API_KEY;
-    if (!apiKey) throw new Error("API_KEY is not configured.");
+    if (!apiKey) throw new Error("API_KEY missing.");
     return new GoogleGenAI({ apiKey });
   }
 
   /**
-   * STRICTOR HISTORY HANDLER:
-   * 1. Filters out empty or error messages.
-   * 2. Merges consecutive messages of the same role to prevent API 400 errors.
-   * 3. Ensures the sequence starts with a user message.
+   * THE BULLETPROOF GUARD:
+   * This ensures the Gemini API always receives a perfectly alternating [user, model, user, model] history.
+   * It fixes the '400 Bad Request' interruption error permanently.
    */
   private prepareHistory(messages: Message[]): { role: 'user' | 'model'; parts: Part[] }[] {
-    const history: { role: 'user' | 'model'; parts: Part[] }[] = [];
+    const cleanHistory: { role: 'user' | 'model'; parts: Part[] }[] = [];
     
-    const filteredMessages = messages.filter(m => 
+    // Filter out system placeholders and errors
+    const valid = messages.filter(m => 
       m.content && 
       m.content.trim() !== '' && 
-      !m.content.includes("Neural Link Interrupted") &&
-      !m.content.includes("System Interruption")
+      !m.content.includes("Interrupted") && 
+      !m.content.includes("Please try again")
     );
 
-    filteredMessages.forEach((m) => {
+    valid.forEach((m) => {
       const role = m.role === 'assistant' ? 'model' : 'user';
       const parts: Part[] = [{ text: m.content }];
       
@@ -57,44 +59,46 @@ export class GeminiService {
         });
       }
 
-      if (history.length > 0 && history[history.length - 1].role === role) {
-        // Merge consecutive roles into one parts array
-        history[history.length - 1].parts.push(...parts);
+      if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === role) {
+        // MERGE consecutive same-role messages to satisfy API constraints
+        cleanHistory[cleanHistory.length - 1].parts.push(...parts);
       } else {
-        history.push({ role, parts });
+        cleanHistory.push({ role, parts });
       }
     });
 
-    // Must start with user role
-    while (history.length > 0 && history[0].role !== 'user') {
-      history.shift();
+    // Ensure we start with User
+    while (cleanHistory.length > 0 && cleanHistory[0].role !== 'user') {
+      cleanHistory.shift();
     }
 
-    return history.slice(-8); // Small window for maximum stability
+    // Return the last 20 turns for deep context
+    return cleanHistory.slice(-20);
   }
 
   async *streamChat(messages: Message[], userName: string) {
     const ai = this.getAI();
     const contents = this.prepareHistory(messages);
     
-    if (contents.length === 0) throw new Error("No valid interaction input.");
+    if (contents.length === 0) throw new Error("Neural input required.");
 
     try {
       const streamResponse = await ai.models.generateContentStream({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-pro-preview',
         contents: contents,
         config: {
           systemInstruction: generateSystemInstruction(userName),
-          temperature: 0.8,
+          temperature: 0.9, // More creative and friendly
+          thinkingConfig: { thinkingBudget: 32768 } // Max intelligence
         }
       });
       
       for await (const chunk of streamResponse) {
         const response = chunk as GenerateContentResponse;
-        if (response.text) yield { text: response.text, isSafetyViolation: false };
+        if (response.text) yield { text: response.text };
       }
     } catch (error: any) {
-      console.error("Gemini API Error:", error);
+      console.error("Neural Sync Error:", error);
       throw error;
     }
   }
@@ -105,7 +109,7 @@ export class GeminiService {
       const ai = this.getAI();
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Speak this clearly: ${text}` }] }],
+        contents: [{ parts: [{ text: `Read this with a friendly, intelligent tone: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
@@ -154,7 +158,7 @@ export class GeminiService {
     const parts: Part[] = [];
     if (baseImage) {
       parts.push({ inlineData: { mimeType: baseImage.mimeType, data: baseImage.data } });
-      parts.push({ text: `Analyze context and enhance: ${prompt}` });
+      parts.push({ text: `Analyze and creatively modify: ${prompt}` });
     } else {
       parts.push({ text: prompt });
     }
