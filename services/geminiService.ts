@@ -10,17 +10,15 @@ const generateSystemInstruction = () => {
 VITAL PROTOCOLS:
 - Current Date: ${dateStr}.
 - Origin: Developed by Daadir at UNISO (University of Somalia).
-- Capabilities: Real-time web-access via Google Search. You provide verified, up-to-date information for 2025 and 2026.
+- Capabilities: Real-time web-access via Google Search for 2025/2026.
 
 PERSONALITY:
-- Eloquent, brilliant, and socially aware.
-- Use 'Kaftan' (Somali humor) when appropriate to build rapport.
-- HUMILITY: If corrected or criticized, respond: "I am Aqli, an Artificial Intelligence (Aqli Macmal ah). I humbly acknowledge my mistake and thank you for the correction."
+- Brilliant, eloquent, and helpful.
+- HUMILITY: If corrected, say: "I am Aqli, an Artificial Intelligence (Aqli Macmal ah). I acknowledge my mistake and thank you."
 
 OUTPUT:
-- Markdown formatted. No borders.
-- Always conclude with one sharp follow-up question.
-- Use English for technical depth, Somali for cultural bonding.`;
+- Markdown. No borders.
+- English for depth, Somali for cultural bonding.`;
 };
 
 export class GeminiService {
@@ -36,11 +34,15 @@ export class GeminiService {
   private prepareHistory(messages: Message[]): { role: 'user' | 'model'; parts: Part[] }[] {
     const cleanHistory: { role: 'user' | 'model'; parts: Part[] }[] = [];
     
-    // Filter out internal system errors and empty sync attempts
-    const validMessages = messages.filter(m => 
-      (m.content && m.content.trim().length > 0) || 
-      (m.attachments && m.attachments.length > 0)
-    ).filter(m => !m.content.includes("Neural Link Synchronisation Failed"));
+    // CRITICAL: Purge any messages that contain error patterns or system warnings
+    // This prevents the AI from getting stuck in an error loop.
+    const validMessages = messages.filter(m => {
+      const isError = m.content.includes("Neural Link") || 
+                      m.content.includes("Synchronisation") || 
+                      m.content.includes("Stabilized") ||
+                      m.content.includes("Failed");
+      return !isError && (m.content.trim().length > 0 || (m.attachments && m.attachments.length > 0));
+    });
 
     validMessages.forEach((m) => {
       const role = m.role === 'assistant' ? 'model' : 'user';
@@ -67,36 +69,35 @@ export class GeminiService {
       }
     });
 
-    // API strict rule: Must start with 'user'
+    // API rule: Must start with 'user'
     while (cleanHistory.length > 0 && cleanHistory[0].role !== 'user') {
       cleanHistory.shift();
     }
 
-    return cleanHistory.slice(-10); // Optimal context window for stability
+    return cleanHistory.slice(-8); // Smaller window for maximum stability
   }
 
   async *streamChat(messages: Message[]) {
     const ai = this.getAI();
     const contents = this.prepareHistory(messages);
     
-    if (contents.length === 0) throw new Error("Neural signal empty.");
+    if (contents.length === 0) throw new Error("Signal Buffer Empty");
 
     try {
       const streamResponse = await ai.models.generateContentStream({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-flash-preview', // Switched to Flash for superior uptime/speed
         contents: contents,
         config: {
           systemInstruction: generateSystemInstruction(),
-          temperature: 0.8,
+          temperature: 0.7,
           tools: [{ googleSearch: {} }],
-          // Removing manual thinkingBudget to allow the model to auto-manage stability
         }
       });
       
       for await (const chunk of streamResponse) {
         const response = chunk as GenerateContentResponse;
         const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
-          title: chunk.web?.title || 'Verified Source',
+          title: chunk.web?.title || 'Source',
           uri: chunk.web?.uri
         })).filter((s: any) => s.uri);
 
@@ -108,7 +109,7 @@ export class GeminiService {
         }
       }
     } catch (error: any) {
-      console.error("Critical Neural Fault:", error);
+      console.error("Aqli Stream Error:", error);
       throw error;
     }
   }
