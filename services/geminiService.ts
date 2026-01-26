@@ -10,15 +10,15 @@ const generateSystemInstruction = () => {
 VITAL PROTOCOLS:
 - Current Date: ${dateStr}.
 - Origin: Developed by Daadir at UNISO (University of Somalia).
-- Capabilities: Real-time web-access via Google Search for 2025/2026.
+- Capabilities: Real-time web-access via Google Search.
 
 PERSONALITY:
 - Brilliant, eloquent, and helpful.
-- HUMILITY: If corrected, say: "I am Aqli, an Artificial Intelligence (Aqli Macmal ah). I acknowledge my mistake and thank you."
+- HUMILITY: If corrected, respond: "I am Aqli, an Artificial Intelligence (Aqli Macmal ah). I acknowledge my mistake and thank you."
 
 OUTPUT:
-- Markdown. No borders.
-- English for depth, Somali for cultural bonding.`;
+- Markdown only. 
+- English for technical accuracy, Somali for natural interaction.`;
 };
 
 export class GeminiService {
@@ -34,14 +34,13 @@ export class GeminiService {
   private prepareHistory(messages: Message[]): { role: 'user' | 'model'; parts: Part[] }[] {
     const cleanHistory: { role: 'user' | 'model'; parts: Part[] }[] = [];
     
-    // CRITICAL: Purge any messages that contain error patterns or system warnings
-    // This prevents the AI from getting stuck in an error loop.
+    // Pattern to catch any previous error messages that might have been saved
+    const errorPatterns = ["Neural Link", "Synchronisation", "Stabilized", "Failed", "Restored", "fresh connection"];
+
     const validMessages = messages.filter(m => {
-      const isError = m.content.includes("Neural Link") || 
-                      m.content.includes("Synchronisation") || 
-                      m.content.includes("Stabilized") ||
-                      m.content.includes("Failed");
-      return !isError && (m.content.trim().length > 0 || (m.attachments && m.attachments.length > 0));
+      const hasErrorText = errorPatterns.some(pattern => m.content.includes(pattern));
+      const hasContent = m.content.trim().length > 0 || (m.attachments && m.attachments.length > 0);
+      return !hasErrorText && hasContent;
     });
 
     validMessages.forEach((m) => {
@@ -62,30 +61,40 @@ export class GeminiService {
 
       if (parts.length === 0) return;
 
+      // Ensure roles alternate strictly: user -> model -> user
       if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === role) {
+        // If same role twice, append parts to the last entry instead of creating new one
         cleanHistory[cleanHistory.length - 1].parts.push(...parts);
       } else {
         cleanHistory.push({ role, parts });
       }
     });
 
-    // API rule: Must start with 'user'
+    // Final checks for API compliance
     while (cleanHistory.length > 0 && cleanHistory[0].role !== 'user') {
       cleanHistory.shift();
     }
 
-    return cleanHistory.slice(-8); // Smaller window for maximum stability
+    // If history becomes empty after filtering, we provide a fallback message to keep sync
+    if (cleanHistory.length === 0 && messages.length > 0) {
+       const lastValidUserMsg = messages.filter(m => m.role === 'user').pop();
+       if (lastValidUserMsg) {
+         return [{ role: 'user', parts: [{ text: lastValidUserMsg.content || "Hello" }] }];
+       }
+    }
+
+    return cleanHistory.slice(-6); // Very tight window for extreme reliability
   }
 
   async *streamChat(messages: Message[]) {
     const ai = this.getAI();
     const contents = this.prepareHistory(messages);
     
-    if (contents.length === 0) throw new Error("Signal Buffer Empty");
+    if (contents.length === 0) throw new Error("NEURAL_EMPTY_SIGNAL");
 
     try {
       const streamResponse = await ai.models.generateContentStream({
-        model: 'gemini-3-flash-preview', // Switched to Flash for superior uptime/speed
+        model: 'gemini-3-flash-preview',
         contents: contents,
         config: {
           systemInstruction: generateSystemInstruction(),
@@ -97,7 +106,7 @@ export class GeminiService {
       for await (const chunk of streamResponse) {
         const response = chunk as GenerateContentResponse;
         const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
-          title: chunk.web?.title || 'Source',
+          title: chunk.web?.title || 'Verified Source',
           uri: chunk.web?.uri
         })).filter((s: any) => s.uri);
 
@@ -109,7 +118,7 @@ export class GeminiService {
         }
       }
     } catch (error: any) {
-      console.error("Aqli Stream Error:", error);
+      console.error("Critical Neural Core Failure:", error);
       throw error;
     }
   }

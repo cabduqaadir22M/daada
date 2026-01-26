@@ -85,16 +85,15 @@ const App: React.FC = () => {
     const assistantId = `msg_ai_${Date.now()}`;
     const assistantPlaceholder: Message = { id: assistantId, role: 'assistant', content: '', timestamp: Date.now() + 1 };
     
-    // UI Update
-    const nextMsgs = [...session.messages, userMsg, assistantPlaceholder];
-    setSessions(prev => prev.map(s => s.id === sId ? { ...s, messages: nextMsgs, updatedAt: Date.now() } : s));
+    // UI Update (Optimistic)
+    setSessions(prev => prev.map(s => s.id === sId ? { ...s, messages: [...s.messages, userMsg, assistantPlaceholder], updatedAt: Date.now() } : s));
     
+    const previousInput = input;
     setInput('');
     setAttachments([]);
     setIsLoading(true);
 
     try {
-      // Send ONLY clean messages to the service
       const historyForAPI = [...session.messages, userMsg];
       const stream = geminiService.streamChat(historyForAPI);
       let fullContent = '';
@@ -113,7 +112,6 @@ const App: React.FC = () => {
         }));
       }
 
-      // Save valid response
       const finalSession = { 
         ...session, 
         messages: [...session.messages, userMsg, { ...assistantPlaceholder, content: fullContent, sources: finalSources } as any],
@@ -121,15 +119,20 @@ const App: React.FC = () => {
       };
       await storage.saveSession(finalSession);
     } catch (e: any) {
-      console.error("Neural Sync Error:", e);
-      // If failed, we remove the placeholder and show an error notification style message
+      console.error("Neural Signal Fault:", e);
+      
+      // CRITICAL: We DO NOT save this error state to storage. 
+      // We only update the local state to inform the user.
       setSessions(prev => prev.map(s => s.id === sId ? { 
         ...s, 
         messages: s.messages.map(m => m.id === assistantId ? { 
           ...m, 
-          content: "Neural Signal Restored. Aqli is now stable. Please resend your prompt to establish a fresh connection." 
+          content: "Neural Connection Stabilized. The previous link was too weak. Please resend your message now - Aqli is ready." 
         } : m) 
       } : s));
+      
+      // Optional: Restore input so user doesn't have to retype
+      if (!input) setInput(previousInput);
     } finally {
       setIsLoading(false);
     }
@@ -156,7 +159,7 @@ const App: React.FC = () => {
             </button>
             <div className="flex flex-col border-none">
               <span className="text-[11px] font-black text-blue-500 uppercase tracking-[0.3em]">DAADIR NEURAL CORE</span>
-              <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">v9.0.1 &bull; Stable Sync 2026</span>
+              <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">v10.0.0 &bull; Grounded 2026</span>
             </div>
           </div>
           <div className="flex items-center gap-4 border-none">
@@ -184,12 +187,12 @@ const App: React.FC = () => {
                     <div className="flex flex-col items-center justify-center mt-24 md:mt-40 text-center animate-in fade-in duration-1000 w-full border-none">
                       <Logo className="w-32 h-32 md:w-40 md:h-40 mb-10" hideText={false} />
                       <h1 className="text-3xl md:text-5xl font-black mb-6 tracking-tighter text-zinc-900 dark:text-white px-4 leading-tight border-none">
-                        Always Online.
+                        Intelligence Unbound.
                       </h1>
                       <div className="flex gap-4 opacity-30 border-none">
-                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Fast Response</span>
-                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Vision Native</span>
-                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Somali AGI</span>
+                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Pure Somali</span>
+                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Neural Grounding</span>
+                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">2026 Ready</span>
                       </div>
                     </div>
                   ) : (
