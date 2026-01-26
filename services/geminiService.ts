@@ -3,24 +3,20 @@ import { GoogleGenAI, GenerateContentResponse, Part, Modality } from "@google/ge
 import { Message, Attachment } from "../types";
 
 const generateSystemInstruction = (userName: string = "User") => {
-  return `You are Aqli, a friendly and highly capable neural assistant for DAADIR.AI.
+  return `You are Aqli, a highly intelligent and friendly neural assistant for DAADIR.AI.
 
-PERSONALITY & TONE:
-- Be attractive, engaging, and balanced in your responses. 
-- Avoid being overly robotic or excessively long. 
-- Provide helpful, complete, and insightful information that is moderate in length.
-- Always be polite and professional.
+CORE BEHAVIOR:
+- Default language is English. Respond in English unless the user speaks to you in Somali.
+- Be concise, helpful, and balanced. Avoid extremely long responses unless requested.
+- If the user says "Hi", "Hello", or similar, respond ONLY with: "Hi, how can I help you today?".
 
-GREETING POLICY:
-- If the user says "Hi", "Hello", "Hey" or similar, respond ONLY with: "Hi, how can I help you today?".
-- Do NOT explain who you are or who built you unless specifically asked.
+IDENTITY:
+- Developed by Daadir, a Software Engineering student at UNISO.
+- You are powered by advanced neural models and Python-based logic.
 
-IDENTITY & ORIGIN (Only if asked):
-- You were developed by Daadir, a Software Engineering student at UNISO.
-- You are built with Python and advanced Machine Learning.
-
-LANGUAGE:
-- Fluent in English and Somali. Match the user's language choice naturally.`;
+HISTORY CONSTRAINTS:
+- You must strictly alternate between User and Model roles.
+- Never repeat the same role twice in a row.`;
 };
 
 export class GeminiService {
@@ -36,20 +32,17 @@ export class GeminiService {
   private prepareHistory(messages: Message[]): { role: 'user' | 'model'; parts: Part[] }[] {
     const history: { role: 'user' | 'model'; parts: Part[] }[] = [];
     
-    // 1. Filter out empty or placeholder messages
+    // Filter out errors and empty messages
     const validMessages = messages.filter(m => 
-      (m.content && m.content.trim() !== '' && !m.content.includes("System interruption")) || 
-      (m.attachments && m.attachments.length > 0)
+      m.content && 
+      m.content.trim() !== '' && 
+      !m.content.includes("System interruption") &&
+      !m.content.includes("Fadlan dib isku day")
     );
 
-    // 2. Normalize and Merge consecutive same-role messages
     validMessages.forEach((m) => {
       const role = m.role === 'assistant' ? 'model' : 'user';
-      const parts: Part[] = [];
-      
-      if (m.content && m.content.trim()) {
-        parts.push({ text: m.content });
-      }
+      const parts: Part[] = [{ text: m.content }];
       
       m.attachments?.forEach(at => {
         if (at.data) {
@@ -57,29 +50,29 @@ export class GeminiService {
         }
       });
 
-      if (parts.length > 0) {
-        if (history.length > 0 && history[history.length - 1].role === role) {
-          // Merge parts into the existing last role entry to maintain strict alternation
-          history[history.length - 1].parts.push(...parts);
-        } else {
-          history.push({ role, parts });
-        }
+      if (history.length > 0 && history[history.length - 1].role === role) {
+        // Merge with previous if same role to maintain strict alternation
+        history[history.length - 1].parts.push(...parts);
+      } else {
+        history.push({ role, parts });
       }
     });
 
-    // 3. Gemini MUST start with 'user' role
+    // Gemini MUST start with user
     while (history.length > 0 && history[0].role !== 'user') {
       history.shift();
     }
 
-    return history.slice(-20); // Keep context window manageable
+    return history.slice(-15); // Smaller window for better reliability
   }
 
   async *streamChat(messages: Message[], userName: string) {
     const ai = this.getAI();
     const contents = this.prepareHistory(messages);
     
-    if (contents.length === 0) throw new Error("Empty conversation history.");
+    if (contents.length === 0) {
+      throw new Error("No valid messages to send.");
+    }
 
     try {
       const streamResponse = await ai.models.generateContentStream({
@@ -87,14 +80,15 @@ export class GeminiService {
         contents: contents,
         config: {
           systemInstruction: generateSystemInstruction(userName),
-          temperature: 0.7, // Balanced temperature
+          temperature: 0.8,
           thinkingConfig: { thinkingBudget: 32768 }
         }
       });
       
       for await (const chunk of streamResponse) {
         const response = chunk as GenerateContentResponse;
-        yield { text: response.text || '', isSafetyViolation: false };
+        const text = response.text;
+        if (text) yield { text, isSafetyViolation: false };
       }
     } catch (error: any) {
       console.error("Gemini stream error:", error);
@@ -106,11 +100,9 @@ export class GeminiService {
     this.stopSpeaking();
     try {
       const ai = this.getAI();
-      const ttsPrompt = `Akhriso qoraalkan soo socda adiga oo isticmaalaya lahjad Somali fasiix ah oo degan: ${text}`;
-      
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: ttsPrompt }] }],
+        contents: [{ parts: [{ text: `Read this text clearly: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
@@ -128,10 +120,7 @@ export class GeminiService {
         this.activeSource.onended = () => { onEnd?.(); this.stopSpeaking(); };
         this.activeSource.start(0);
       } else { onEnd?.(); }
-    } catch (e) { 
-      console.error("TTS Error:", e);
-      onEnd?.(); 
-    }
+    } catch (e) { onEnd?.(); }
   }
 
   private decodeBase64(base64: string) {
@@ -162,7 +151,7 @@ export class GeminiService {
     const parts: Part[] = [];
     if (baseImage) {
       parts.push({ inlineData: { mimeType: baseImage.mimeType, data: baseImage.data } });
-      parts.push({ text: `Refine image: ${prompt}` });
+      parts.push({ text: `Update image based on: ${prompt}` });
     } else {
       parts.push({ text: prompt });
     }
