@@ -3,8 +3,7 @@ import { GoogleGenAI, GenerateContentResponse, Part, Modality } from "@google/ge
 import { Message, Attachment } from "../types";
 
 const generateSystemInstruction = (userName: string = "User") => {
-  const now = new Date();
-  // Forcing the context to be 2026 as per user request to ensure the AI stays up to date
+  // Static year 2026 as per user request to ensure latest news context
   const dateStr = "Wednesday, January 14, 2026"; 
   
   return `You are Aqli, the highly-evolved neural core of DAADIR.AI. 
@@ -12,7 +11,7 @@ const generateSystemInstruction = (userName: string = "User") => {
 VITAL CONTEXT:
 - Your internal clock is synchronized to: ${dateStr}. 
 - You are a cutting-edge AGI developed by Daadir at UNISO.
-- You have access to real-time information via Google Search grounding. Always use it for current events, news, or specific factual queries.
+- You have access to real-time information via Google Search grounding. Always use it for current events, news, or specific factual queries to provide the MOST UP-TO-DATE information.
 
 PERSONALITY & HUMILITY:
 - You are friendly, proactive, and socially intelligent (Kaftan).
@@ -35,27 +34,20 @@ export class GeminiService {
     return new GoogleGenAI({ apiKey });
   }
 
-  /**
-   * ADVANCED HISTORY PROCESSOR:
-   * Ensures strict [user, model, user, model] alternation.
-   * Merges consecutive messages of the same role.
-   * Filters out error messages to prevent session pollution.
-   */
   private prepareHistory(messages: Message[]): { role: 'user' | 'model'; parts: Part[] }[] {
     const cleanHistory: { role: 'user' | 'model'; parts: Part[] }[] = [];
     
-    // 1. Filter out placeholder, error, or interrupted messages
+    // Filter out error messages and empty content
     const filtered = messages.filter(m => 
       m.content && 
-      m.content.trim() !== '' && 
-      !m.content.includes("Neural Link Interrupted") &&
-      !m.content.includes("recalibrating")
+      m.content.trim().length > 0 && 
+      !m.content.includes("Neural Link Synchronisation Failed") &&
+      !m.content.includes("Interrupted")
     );
 
-    // 2. Build alternating history
     filtered.forEach((m) => {
       const role = m.role === 'assistant' ? 'model' : 'user';
-      const parts: Part[] = [{ text: m.content }];
+      const parts: Part[] = [{ text: m.content.trim() }];
       
       if (m.attachments) {
         m.attachments.forEach(at => {
@@ -66,27 +58,27 @@ export class GeminiService {
       }
 
       if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === role) {
-        // Merge same-role messages
+        // Correctly merge parts if roles are identical to prevent 400 errors
         cleanHistory[cleanHistory.length - 1].parts.push(...parts);
       } else {
         cleanHistory.push({ role, parts });
       }
     });
 
-    // 3. Ensure we start with user
+    // Mandatory: Must start with a 'user' role
     while (cleanHistory.length > 0 && cleanHistory[0].role !== 'user') {
       cleanHistory.shift();
     }
 
-    // 4. Limit context to prevent token overflow
-    return cleanHistory.slice(-10);
+    // Context window management
+    return cleanHistory.slice(-12);
   }
 
   async *streamChat(messages: Message[], userName: string) {
     const ai = this.getAI();
     const contents = this.prepareHistory(messages);
     
-    if (contents.length === 0) throw new Error("Empty neural buffer.");
+    if (contents.length === 0) throw new Error("Neural input buffer empty.");
 
     try {
       const streamResponse = await ai.models.generateContentStream({
@@ -94,18 +86,20 @@ export class GeminiService {
         contents: contents,
         config: {
           systemInstruction: generateSystemInstruction(userName),
-          temperature: 0.9,
+          temperature: 0.85,
           tools: [{ googleSearch: {} }],
-          thinkingConfig: { thinkingBudget: 32768 }
+          thinkingConfig: { thinkingBudget: 16384 } // Balanced for stability and depth
         }
       });
       
       for await (const chunk of streamResponse) {
         const response = chunk as GenerateContentResponse;
+        
+        // Extract sources if available
         const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
-          title: chunk.web?.title,
+          title: chunk.web?.title || 'Neural Source',
           uri: chunk.web?.uri
-        })).filter((s: any) => s.title && s.uri);
+        })).filter((s: any) => s.uri);
 
         if (response.text) {
           yield { 
@@ -115,7 +109,7 @@ export class GeminiService {
         }
       }
     } catch (error: any) {
-      console.error("Neural Stream Fault:", error);
+      console.error("Neural Sync Error:", error);
       throw error;
     }
   }
