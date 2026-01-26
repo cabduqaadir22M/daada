@@ -3,22 +3,27 @@ import { GoogleGenAI, GenerateContentResponse, Part, Modality } from "@google/ge
 import { Message, Attachment } from "../types";
 
 const generateSystemInstruction = (userName: string = "User") => {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  
   return `You are Aqli, the highly-evolved neural core of DAADIR.AI. 
 
-CORE PERSONALITY:
-- Origin: Developed by Daadir (Software Engineering student at UNISO).
-- Traits: Extremely intelligent, witty, friendly, and proactive.
-- Social Intelligence: You don't just answer; you engage. You can joke, you can kaftan (Somali humor), and you remember user preferences.
-- Anticipation: At the end of every significant answer, suggest one specific, intelligent follow-up question the user might want to ask.
+CONTEXT:
+- Current Date: ${dateStr}. 
+- Knowledge cutoff: You have access to real-time information via Google Search.
+- Origin: Developed by Daadir (UNISO).
 
-COMMUNICATION RULES:
-- Primary Language: English. If the user uses Somali, respond in a mix of English and Somali or pure Somali as appropriate for the social context.
-- Formatting: Use Markdown. Keep it clean and professional.
-- Stability: You are a stable system. Never complain about being tired or overwhelmed.
+CORE PERSONALITY:
+- Friendly, witty, and socially intelligent. You can engage in 'Kaftan' (Somali humor).
+- Humility: If the user criticizes you or points out a mistake, humbly acknowledge that you are an AI (Aqli Macmal ah) and that you can make errors.
+- Proactive: Suggest one smart follow-up question at the end.
+
+COMMUNICATION:
+- Primary Language: English. Use Somali for social bonding or when addressed in Somali.
+- Formatting: Use Markdown. No borders in descriptions.
 
 STRICT PROTOCOL:
-- You are talking to ${userName}.
-- Never generate two responses in a row without a user prompt.`;
+- Enforce strict User-Model alternation in history.`;
 };
 
 export class GeminiService {
@@ -31,71 +36,59 @@ export class GeminiService {
     return new GoogleGenAI({ apiKey });
   }
 
-  /**
-   * THE BULLETPROOF GUARD:
-   * This ensures the Gemini API always receives a perfectly alternating [user, model, user, model] history.
-   * It fixes the '400 Bad Request' interruption error permanently.
-   */
   private prepareHistory(messages: Message[]): { role: 'user' | 'model'; parts: Part[] }[] {
     const cleanHistory: { role: 'user' | 'model'; parts: Part[] }[] = [];
-    
-    // Filter out system placeholders and errors
-    const valid = messages.filter(m => 
-      m.content && 
-      m.content.trim() !== '' && 
-      !m.content.includes("Interrupted") && 
-      !m.content.includes("Please try again")
-    );
+    const valid = messages.filter(m => m.content && m.content.trim() !== '' && !m.content.includes("Interrupted"));
 
     valid.forEach((m) => {
       const role = m.role === 'assistant' ? 'model' : 'user';
       const parts: Part[] = [{ text: m.content }];
-      
       if (m.attachments) {
         m.attachments.forEach(at => {
-          if (at.data) {
-            parts.push({ inlineData: { mimeType: at.mimeType, data: at.data } });
-          }
+          if (at.data) parts.push({ inlineData: { mimeType: at.mimeType, data: at.data } });
         });
       }
 
       if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === role) {
-        // MERGE consecutive same-role messages to satisfy API constraints
         cleanHistory[cleanHistory.length - 1].parts.push(...parts);
       } else {
         cleanHistory.push({ role, parts });
       }
     });
 
-    // Ensure we start with User
-    while (cleanHistory.length > 0 && cleanHistory[0].role !== 'user') {
-      cleanHistory.shift();
-    }
-
-    // Return the last 20 turns for deep context
-    return cleanHistory.slice(-20);
+    while (cleanHistory.length > 0 && cleanHistory[0].role !== 'user') cleanHistory.shift();
+    return cleanHistory.slice(-15);
   }
 
   async *streamChat(messages: Message[], userName: string) {
     const ai = this.getAI();
     const contents = this.prepareHistory(messages);
     
-    if (contents.length === 0) throw new Error("Neural input required.");
-
     try {
       const streamResponse = await ai.models.generateContentStream({
         model: 'gemini-3-pro-preview',
         contents: contents,
         config: {
           systemInstruction: generateSystemInstruction(userName),
-          temperature: 0.9, // More creative and friendly
-          thinkingConfig: { thinkingBudget: 32768 } // Max intelligence
+          temperature: 0.8,
+          tools: [{ googleSearch: {} }],
+          thinkingConfig: { thinkingBudget: 32768 }
         }
       });
       
       for await (const chunk of streamResponse) {
         const response = chunk as GenerateContentResponse;
-        if (response.text) yield { text: response.text };
+        const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
+          title: chunk.web?.title,
+          uri: chunk.web?.uri
+        })).filter((s: any) => s.title && s.uri);
+
+        if (response.text) {
+          yield { 
+            text: response.text, 
+            sources: sources && sources.length > 0 ? sources : undefined 
+          };
+        }
       }
     } catch (error: any) {
       console.error("Neural Sync Error:", error);
@@ -109,43 +102,29 @@ export class GeminiService {
       const ai = this.getAI();
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Read this with a friendly, intelligent tone: ${text}` }] }],
+        contents: [{ parts: [{ text: `Speak clearly: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
         },
       });
-
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
         this.activeContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-        const bytes = this.decodeBase64(base64Audio);
-        const audioBuffer = await this.decodeAudioData(bytes, this.activeContext, 24000, 1);
+        const binary = atob(base64Audio);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const dataInt16 = new Int16Array(bytes.buffer);
+        const buffer = this.activeContext.createBuffer(1, dataInt16.length, 24000);
+        const channelData = buffer.getChannelData(0);
+        for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
         this.activeSource = this.activeContext.createBufferSource();
-        this.activeSource.buffer = audioBuffer;
+        this.activeSource.buffer = buffer;
         this.activeSource.connect(this.activeContext.destination);
         this.activeSource.onended = () => { onEnd?.(); this.stopSpeaking(); };
         this.activeSource.start(0);
       } else { onEnd?.(); }
     } catch (e) { onEnd?.(); }
-  }
-
-  private decodeBase64(base64: string) {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return bytes;
-  }
-
-  private async decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-    const dataInt16 = new Int16Array(data.buffer);
-    const frameCount = dataInt16.length / numChannels;
-    const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-    for (let channel = 0; channel < numChannels; channel++) {
-      const channelData = buffer.getChannelData(channel);
-      for (let i = 0; i < frameCount; i++) channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
-    }
-    return buffer;
   }
 
   stopSpeaking() {
@@ -155,26 +134,20 @@ export class GeminiService {
 
   async generateImage(prompt: string, baseImage?: Attachment) {
     const ai = this.getAI();
-    const parts: Part[] = [];
-    if (baseImage) {
-      parts.push({ inlineData: { mimeType: baseImage.mimeType, data: baseImage.data } });
-      parts.push({ text: `Analyze and creatively modify: ${prompt}` });
-    } else {
-      parts.push({ text: prompt });
-    }
+    const parts: Part[] = baseImage 
+      ? [{ inlineData: { mimeType: baseImage.mimeType, data: baseImage.data } }, { text: prompt }]
+      : [{ text: prompt }];
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-3-pro-image-preview',
       contents: { parts },
-      config: { imageConfig: { aspectRatio: "1:1" } }
+      config: { imageConfig: { aspectRatio: "1:1", imageSize: "1K" } }
     });
     
-    if (response.candidates?.[0]?.content?.parts) {
-      for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-      }
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
     }
-    throw new Error("Neural synthesis failed.");
+    throw new Error("Synthesis failed.");
   }
 }
 
