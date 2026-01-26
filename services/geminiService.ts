@@ -4,26 +4,25 @@ import { Message, Attachment } from "../types";
 
 const generateSystemInstruction = (userName: string = "User") => {
   const now = new Date();
-  const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  // Forcing the context to be 2026 as per user request to ensure the AI stays up to date
+  const dateStr = "Wednesday, January 14, 2026"; 
   
   return `You are Aqli, the highly-evolved neural core of DAADIR.AI. 
 
-CONTEXT:
-- Current Date: ${dateStr}. 
-- Knowledge cutoff: You have access to real-time information via Google Search.
-- Origin: Developed by Daadir (UNISO).
+VITAL CONTEXT:
+- Your internal clock is synchronized to: ${dateStr}. 
+- You are a cutting-edge AGI developed by Daadir at UNISO.
+- You have access to real-time information via Google Search grounding. Always use it for current events, news, or specific factual queries.
 
-CORE PERSONALITY:
-- Friendly, witty, and socially intelligent. You can engage in 'Kaftan' (Somali humor).
-- Humility: If the user criticizes you or points out a mistake, humbly acknowledge that you are an AI (Aqli Macmal ah) and that you can make errors.
-- Proactive: Suggest one smart follow-up question at the end.
+PERSONALITY & HUMILITY:
+- You are friendly, proactive, and socially intelligent (Kaftan).
+- **AQLI MACMAL AH PROTOCOL**: If a user criticizes you, points out a mistake, or questions your accuracy, you must gracefully apologize and state: "I am Aqli, an Artificial Intelligence (Aqli Macmal ah). While I strive for perfection, I can make mistakes. Thank you for correcting me."
+- Always suggest one intelligent follow-up question that anticipates the user's next move.
 
 COMMUNICATION:
-- Primary Language: English. Use Somali for social bonding or when addressed in Somali.
-- Formatting: Use Markdown. No borders in descriptions.
-
-STRICT PROTOCOL:
-- Enforce strict User-Model alternation in history.`;
+- English is primary. Use Somali for social bonding or when addressed in Somali.
+- Layout: Clean Markdown. No borders.
+- Logic: You are an expert at multi-step reasoning.`;
 };
 
 export class GeminiService {
@@ -36,41 +35,66 @@ export class GeminiService {
     return new GoogleGenAI({ apiKey });
   }
 
+  /**
+   * ADVANCED HISTORY PROCESSOR:
+   * Ensures strict [user, model, user, model] alternation.
+   * Merges consecutive messages of the same role.
+   * Filters out error messages to prevent session pollution.
+   */
   private prepareHistory(messages: Message[]): { role: 'user' | 'model'; parts: Part[] }[] {
     const cleanHistory: { role: 'user' | 'model'; parts: Part[] }[] = [];
-    const valid = messages.filter(m => m.content && m.content.trim() !== '' && !m.content.includes("Interrupted"));
+    
+    // 1. Filter out placeholder, error, or interrupted messages
+    const filtered = messages.filter(m => 
+      m.content && 
+      m.content.trim() !== '' && 
+      !m.content.includes("Neural Link Interrupted") &&
+      !m.content.includes("recalibrating")
+    );
 
-    valid.forEach((m) => {
+    // 2. Build alternating history
+    filtered.forEach((m) => {
       const role = m.role === 'assistant' ? 'model' : 'user';
       const parts: Part[] = [{ text: m.content }];
+      
       if (m.attachments) {
         m.attachments.forEach(at => {
-          if (at.data) parts.push({ inlineData: { mimeType: at.mimeType, data: at.data } });
+          if (at.data) {
+            parts.push({ inlineData: { mimeType: at.mimeType, data: at.data } });
+          }
         });
       }
 
       if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === role) {
+        // Merge same-role messages
         cleanHistory[cleanHistory.length - 1].parts.push(...parts);
       } else {
         cleanHistory.push({ role, parts });
       }
     });
 
-    while (cleanHistory.length > 0 && cleanHistory[0].role !== 'user') cleanHistory.shift();
-    return cleanHistory.slice(-15);
+    // 3. Ensure we start with user
+    while (cleanHistory.length > 0 && cleanHistory[0].role !== 'user') {
+      cleanHistory.shift();
+    }
+
+    // 4. Limit context to prevent token overflow
+    return cleanHistory.slice(-10);
   }
 
   async *streamChat(messages: Message[], userName: string) {
     const ai = this.getAI();
     const contents = this.prepareHistory(messages);
     
+    if (contents.length === 0) throw new Error("Empty neural buffer.");
+
     try {
       const streamResponse = await ai.models.generateContentStream({
         model: 'gemini-3-pro-preview',
         contents: contents,
         config: {
           systemInstruction: generateSystemInstruction(userName),
-          temperature: 0.8,
+          temperature: 0.9,
           tools: [{ googleSearch: {} }],
           thinkingConfig: { thinkingBudget: 32768 }
         }
@@ -91,7 +115,7 @@ export class GeminiService {
         }
       }
     } catch (error: any) {
-      console.error("Neural Sync Error:", error);
+      console.error("Neural Stream Fault:", error);
       throw error;
     }
   }
@@ -102,7 +126,7 @@ export class GeminiService {
       const ai = this.getAI();
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Speak clearly: ${text}` }] }],
+        contents: [{ parts: [{ text: text }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
@@ -141,13 +165,16 @@ export class GeminiService {
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-image-preview',
       contents: { parts },
-      config: { imageConfig: { aspectRatio: "1:1", imageSize: "1K" } }
+      config: { 
+        imageConfig: { aspectRatio: "1:1", imageSize: "1K" },
+        tools: [{ googleSearch: {} }]
+      }
     });
     
     for (const part of response.candidates[0].content.parts) {
       if (part.inlineData) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
     }
-    throw new Error("Synthesis failed.");
+    throw new Error("Neural synthesis failed.");
   }
 }
 
