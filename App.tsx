@@ -11,18 +11,8 @@ import { geminiService } from './services/geminiService';
 import { storage } from './services/storage';
 import { Logo } from './components/Logo';
 
-const GUEST_USER: User = {
-  id: 'guest_user',
-  name: 'Aqli Guest',
-  email: '',
-  username: 'guest',
-  strikes: 0,
-  banUntil: 0
-};
-
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => storage.getActiveUser());
-  const [showAuth, setShowAuth] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [currentRenderSession, setCurrentRenderSession] = useState<ChatSession | null>(null);
@@ -36,17 +26,16 @@ const App: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const currentUser = user || GUEST_USER;
-
   useEffect(() => {
     if (isDarkMode) document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
   }, [isDarkMode]);
 
   const loadSessions = useCallback(async () => {
-    const stored = await storage.getSessions(currentUser.id, false);
+    if (!user) return;
+    const stored = await storage.getSessions(user.id, false);
     setSessions(stored);
-  }, [currentUser.id]);
+  }, [user]);
 
   useEffect(() => { loadSessions(); }, [loadSessions]);
 
@@ -64,7 +53,7 @@ const App: React.FC = () => {
 
   const handleSend = async () => {
     const trimmedInput = input.trim();
-    if ((!trimmedInput && attachments.length === 0) || isLoading) return;
+    if ((!trimmedInput && attachments.length === 0) || isLoading || !user) return;
 
     let sId = activeSessionId;
     let session = currentRenderSession;
@@ -73,12 +62,11 @@ const App: React.FC = () => {
       const newId = `session_${Date.now()}`;
       session = {
         id: newId,
-        userId: currentUser.id,
+        userId: user.id,
         title: trimmedInput.slice(0, 40) || 'New conversation',
         messages: [],
         createdAt: Date.now(),
-        updatedAt: Date.now(),
-        isPrivate: false
+        updatedAt: Date.now()
       };
       sId = newId;
       setActiveSessionId(sId);
@@ -94,17 +82,19 @@ const App: React.FC = () => {
 
     const assistantId = `msg_ai_${Date.now()}`;
     const assistantMsg: Message = { id: assistantId, role: 'assistant', content: '', timestamp: Date.now() + 1 };
-    const updatedSession = { ...session, messages: [...session.messages, userMsg, assistantMsg], updatedAt: Date.now() };
+    
+    // Optimistically update UI
+    const updatedMessages = [...session.messages, userMsg, assistantMsg];
+    const updatedSession = { ...session, messages: updatedMessages, updatedAt: Date.now() };
 
     setCurrentRenderSession(updatedSession);
-    await storage.saveSession(updatedSession);
-
     setInput('');
     setAttachments([]);
     setIsLoading(true);
 
     try {
-      const stream = geminiService.streamChat([...session.messages, userMsg], currentUser.name);
+      // Send history including the current user message
+      const stream = geminiService.streamChat(updatedMessages.filter(m => m.id !== assistantId), user.name);
       let fullContent = '';
       let isFirstChunk = true;
 
@@ -121,7 +111,10 @@ const App: React.FC = () => {
         });
       }
 
-      const finalSession = { ...updatedSession, messages: updatedSession.messages.map(m => m.id === assistantId ? { ...m, content: fullContent } : m) };
+      const finalSession = { 
+        ...updatedSession, 
+        messages: updatedSession.messages.map(m => m.id === assistantId ? { ...m, content: fullContent } : m) 
+      };
       await storage.saveSession(finalSession);
       setSessions(prev => {
         const exists = prev.find(s => s.id === sId);
@@ -129,24 +122,28 @@ const App: React.FC = () => {
         return [finalSession, ...prev];
       });
     } catch (e: any) {
+      console.error("Chat Error:", e);
       setIsLoading(false);
-      const errorMsg = "I encountered an error. Please try again or check your link.";
-      setCurrentRenderSession(prev => prev ? { ...prev, messages: prev.messages.map(m => m.id === assistantId ? { ...m, content: errorMsg } : m) } : prev);
+      const errorMsg = "System interruption. Please try again.";
+      setCurrentRenderSession(prev => prev ? { 
+        ...prev, 
+        messages: prev.messages.map(m => m.id === assistantId ? { ...m, content: errorMsg } : m) 
+      } : prev);
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (showAuth) return <AuthView onAuthSuccess={(u) => { setUser(u); setShowAuth(false); }} />;
+  if (!user) return <AuthView onAuthSuccess={(u) => setUser(u)} />;
 
   return (
     <div className="flex h-screen w-full bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans overflow-hidden transition-colors">
       <Sidebar 
-        user={currentUser} isRealUser={!!user} onUpdateUser={() => {}} sessions={sessions} activeSessionId={activeSessionId}
+        user={user} isRealUser={true} onUpdateUser={() => {}} sessions={sessions} activeSessionId={activeSessionId}
         onSelectSession={setActiveSessionId} onNewChat={() => { setActiveSessionId(null); setCurrentRenderSession(null); setView('chat'); }}
         view={view} setView={setView} isOpen={isSidebarOpen} onToggle={() => setSidebarOpen(!isSidebarOpen)}
         onDeleteSession={async (id) => { await storage.deleteSession(id); setSessions(prev => prev.filter(s => s.id !== id)); }}
-        onLogOut={user ? () => { storage.setActiveUser(null); setUser(null); } : () => setShowAuth(true)} 
+        onLogOut={() => { storage.setActiveUser(null); setUser(null); }} 
         isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)}
       />
       
@@ -158,7 +155,7 @@ const App: React.FC = () => {
             </button>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-              <span className="text-[10px] md:text-xs font-bold text-zinc-400 truncate tracking-wide">Aqli Intelligence</span>
+              <span className="text-[10px] md:text-xs font-bold text-zinc-400 truncate tracking-widest uppercase">Aqli Neural Link</span>
             </div>
           </div>
           <div className="flex items-center gap-2 md:gap-3">
@@ -167,16 +164,15 @@ const App: React.FC = () => {
                  Chat
                </button>
              )}
-             {!user && <button onClick={() => setShowAuth(true)} className="px-3 py-1.5 bg-zinc-900 dark:bg-white text-white dark:text-black text-[9px] md:text-[10px] font-bold rounded-full hover:opacity-80 shadow-lg">Add account</button>}
              <div className="w-8 h-8 rounded-xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-[10px] font-bold overflow-hidden border border-zinc-200 dark:border-white/5 shadow-sm">
-               {currentUser.avatar ? <img src={currentUser.avatar} className="w-full h-full object-cover" /> : currentUser.name.charAt(0)}
+               {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.name.charAt(0)}
              </div>
           </div>
         </header>
 
         <div className="flex-1 w-full overflow-hidden flex flex-col relative">
           {view === 'image-gen' ? (
-            <ImageGenerator user={currentUser} />
+            <ImageGenerator user={user} />
           ) : view === 'admin' ? (
             <AdminConsole />
           ) : (
@@ -192,7 +188,7 @@ const App: React.FC = () => {
                     </div>
                   ) : (
                     <div className="space-y-6 md:space-y-10 w-full">
-                      {currentRenderSession.messages.map(m => <ChatMessage key={m.id} message={m} user={currentUser} />)}
+                      {currentRenderSession.messages.map(m => <ChatMessage key={m.id} message={m} user={user} />)}
                       {isLoading && <ThinkingIndicator />}
                     </div>
                   )}
@@ -201,7 +197,7 @@ const App: React.FC = () => {
 
               <div className="absolute bottom-0 inset-x-0 p-4 md:p-8 bg-gradient-to-t from-white dark:from-black via-white/80 dark:via-black/80 to-transparent z-20">
                 <div className="max-w-3xl mx-auto relative w-full">
-                  <div className="bg-zinc-50 dark:bg-zinc-900/80 rounded-3xl md:rounded-[2rem] p-2 md:p-3 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all shadow-xl backdrop-blur-md">
+                  <div className="bg-zinc-50 dark:bg-zinc-900/80 rounded-[2rem] p-2 md:p-3 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all shadow-xl backdrop-blur-md">
                     <div className="flex items-center gap-1 md:gap-2">
                       <button onClick={() => fileInputRef.current?.click()} className="p-3 md:p-4 text-zinc-400 hover:text-blue-600 transition-all shrink-0">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2.5" strokeLinecap="round"/></svg>
@@ -220,7 +216,7 @@ const App: React.FC = () => {
                       <textarea 
                         value={input} onChange={e => setInput(e.target.value)}
                         onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) { e.preventDefault(); handleSend(); } }}
-                        placeholder="Message Aqli..."
+                        placeholder="Ask Aqli anything..."
                         className="flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-base py-3 md:py-4 outline-none resize-none max-h-40 dark:text-white placeholder-zinc-400 font-medium"
                         rows={1}
                       />

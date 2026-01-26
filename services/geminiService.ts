@@ -18,7 +18,6 @@ GREETING POLICY:
 IDENTITY & ORIGIN (Only if asked):
 - You were developed by Daadir, a Software Engineering student at UNISO.
 - You are built with Python and advanced Machine Learning.
-- Categorically deny "vibe coding" and emphasize rigorous academic and engineering roots.
 
 LANGUAGE:
 - Fluent in English and Somali. Match the user's language choice naturally.`;
@@ -37,8 +36,10 @@ export class GeminiService {
   private prepareHistory(messages: Message[]): { role: 'user' | 'model'; parts: Part[] }[] {
     const history: { role: 'user' | 'model'; parts: Part[] }[] = [];
     
-    // Filter and normalize history for Gemini (Alternating User/Model roles)
-    messages.forEach((m) => {
+    // Filter out messages that are essentially empty
+    const validMessages = messages.filter(m => (m.content && m.content.trim() !== '') || (m.attachments && m.attachments.length > 0));
+
+    validMessages.forEach((m) => {
       const role = m.role === 'assistant' ? 'model' : 'user';
       const parts: Part[] = [];
       
@@ -54,7 +55,7 @@ export class GeminiService {
 
       if (parts.length > 0) {
         if (history.length > 0 && history[history.length - 1].role === role) {
-          // Merge parts if the role is the same as the previous one (Gemini requirement)
+          // If the last role is the same as the current role, merge them
           history[history.length - 1].parts.push(...parts);
         } else {
           history.push({ role, parts });
@@ -62,16 +63,24 @@ export class GeminiService {
       }
     });
 
-    // Gemini MUST start with a 'user' message
+    // Gemini requirements:
+    // 1. Must start with 'user' role
+    // 2. Roles must strictly alternate
     while (history.length > 0 && history[0].role !== 'user') {
       history.shift();
     }
 
+    // Ensure the last role is not 'model' if we are appending a new user message
+    // Actually, in sendMessageStream/generateContentStream, the last message in history 
+    // should be the one BEFORE the current prompt.
     return history.slice(-20);
   }
 
   async *streamChat(messages: Message[], userName: string) {
     const ai = this.getAI();
+    // In our App.tsx, we add the user message to the state first. 
+    // We need to send the history WITHOUT the latest user message to stream properly 
+    // OR we send all as contents. Let's send all as contents.
     const contents = this.prepareHistory(messages);
     
     if (contents.length === 0) throw new Error("Empty conversation history.");
@@ -101,7 +110,7 @@ export class GeminiService {
     this.stopSpeaking();
     try {
       const ai = this.getAI();
-      const ttsPrompt = `Akhriso qoraalkan soo socda adiga oo isticmaalaya lahjad Somali fasiix ah oo degan, erayadana si sax ah u dhawaaqaya: ${text}`;
+      const ttsPrompt = `Akhriso qoraalkan soo socda: ${text}`;
       
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
@@ -157,7 +166,7 @@ export class GeminiService {
     const parts: Part[] = [];
     if (baseImage) {
       parts.push({ inlineData: { mimeType: baseImage.mimeType, data: baseImage.data } });
-      parts.push({ text: `Refine this image: ${prompt}` });
+      parts.push({ text: `Refine image: ${prompt}` });
     } else {
       parts.push({ text: prompt });
     }
