@@ -46,6 +46,15 @@
         transition: background-color 0.3s ease;
       }
 
+      * {
+        scrollbar-width: none !important; /* Firefox */
+        -ms-overflow-style: none !important; /* IE/Edge */
+      }
+      
+      *::-webkit-scrollbar {
+        display: none !important; /* Chrome/Safari */
+      }
+
       input::-webkit-outer-spin-button,
       input::-webkit-inner-spin-button {
         -webkit-appearance: none !important;
@@ -56,14 +65,6 @@
         resize: none !important;
       }
 
-      .custom-scrollbar {
-        scrollbar-width: none; /* Firefox */
-        -ms-overflow-style: none; /* IE/Edge */
-      }
-      .custom-scrollbar::-webkit-scrollbar {
-        display: none; /* Chrome/Safari */
-      }
-      
       #root {
         height: 100vh;
         display: flex;
@@ -80,12 +81,12 @@
         z-index: 9999;
       }
 
-      @keyframes pulse-custom {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.7; transform: scale(0.95); }
+      @keyframes neural-pulse {
+        0%, 100% { opacity: 1; transform: scale(1); filter: blur(0); }
+        50% { opacity: 0.5; transform: scale(0.92); filter: blur(2px); }
       }
       .animate-loader {
-        animation: pulse-custom 2s infinite ease-in-out;
+        animation: neural-pulse 2.5s infinite ease-in-out;
       }
     </style>
   <script type="importmap">
@@ -105,14 +106,14 @@
   <body class="bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 transition-colors">
     <div id="root">
       <div class="initial-loader">
-        <div class="animate-loader" style="width: 80px; height: 80px;">
+        <div class="animate-loader" style="width: 120px; height: 120px;">
            <svg viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M120 60 L 120 340 L 200 340 C 300 340, 360 280, 360 200 C 360 120, 300 60, 200 60 L 120 60 Z" fill="#fff" />
             <path d="M165 105 L 165 295 L 190 295 C 260 295, 300 250, 300 200 C 300 150, 260 105, 190 105 L 165 105 Z" fill="#000" />
             <rect x="120" y="195" width="45" height="10" fill="#000" />
           </svg>
         </div>
-        <div style="margin-top: 32px; font-weight: 800; font-size: 14px; letter-spacing: 0.8em; color: #fff; text-indent: 0.8em;">DAADIR</div>
+        <div style="margin-top: 48px; font-weight: 900; font-size: 16px; letter-spacing: 1.2em; color: #fff; text-indent: 1.2em; text-transform: uppercase; opacity: 0.6;">DAADIR</div>
       </div>
     </div>
     <script type="module" src="/index.tsx"></script>
@@ -122,10 +123,10 @@
           const loader = document.querySelector('.initial-loader');
           if (loader) {
             loader.style.opacity = '0';
-            loader.style.transition = 'opacity 0.6s ease';
-            setTimeout(() => loader.style.display = 'none', 600);
+            loader.style.transition = 'opacity 1s cubic-bezier(0.4, 0, 0.2, 1)';
+            setTimeout(() => loader.style.display = 'none', 1000);
           }
-        }, 1200);
+        }, 1500);
       });
     </script>
   </body>

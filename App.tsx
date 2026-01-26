@@ -43,12 +43,15 @@ const App: React.FC = () => {
     const fetchActive = async () => {
       const found = sessions.find(s => s.id === activeSessionId);
       if (found) setCurrentRenderSession(found);
+      else setCurrentRenderSession(null);
     };
     fetchActive();
   }, [activeSessionId, sessions]);
 
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
   }, [currentRenderSession?.messages, isLoading, view]);
 
   const handleSend = async () => {
@@ -63,7 +66,7 @@ const App: React.FC = () => {
       session = {
         id: newId,
         userId: user.id,
-        title: trimmedInput.slice(0, 40) || 'New conversation',
+        title: trimmedInput.slice(0, 40) || 'Dadaal cusub',
         messages: [],
         createdAt: Date.now(),
         updatedAt: Date.now()
@@ -75,7 +78,7 @@ const App: React.FC = () => {
     const userMsg: Message = {
       id: `msg_user_${Date.now()}`,
       role: 'user',
-      content: trimmedInput || "Attached file",
+      content: trimmedInput || "Sawir ayaa ku lifaaqan",
       timestamp: Date.now(),
       attachments: attachments.length > 0 ? [...attachments] : undefined
     };
@@ -83,18 +86,19 @@ const App: React.FC = () => {
     const assistantId = `msg_ai_${Date.now()}`;
     const assistantMsg: Message = { id: assistantId, role: 'assistant', content: '', timestamp: Date.now() + 1 };
     
-    // Optimistically update UI
-    const updatedMessages = [...session.messages, userMsg, assistantMsg];
-    const updatedSession = { ...session, messages: updatedMessages, updatedAt: Date.now() };
+    // UI Update - Add User Message and Placeholder for AI
+    const messagesWithPlaceholder = [...session.messages, userMsg, assistantMsg];
+    const temporarySessionState = { ...session, messages: messagesWithPlaceholder, updatedAt: Date.now() };
 
-    setCurrentRenderSession(updatedSession);
+    setCurrentRenderSession(temporarySessionState);
     setInput('');
     setAttachments([]);
     setIsLoading(true);
 
     try {
-      // Send history including the current user message
-      const stream = geminiService.streamChat(updatedMessages.filter(m => m.id !== assistantId), user.name);
+      // Stream with history excluding the empty placeholder
+      const historyForAPI = [...session.messages, userMsg];
+      const stream = geminiService.streamChat(historyForAPI, user.name);
       let fullContent = '';
       let isFirstChunk = true;
 
@@ -111,20 +115,21 @@ const App: React.FC = () => {
         });
       }
 
-      const finalSession = { 
-        ...updatedSession, 
-        messages: updatedSession.messages.map(m => m.id === assistantId ? { ...m, content: fullContent } : m) 
-      };
+      // Final save to IndexedDB
+      const finalMessages = [...session.messages, userMsg, { ...assistantMsg, content: fullContent }];
+      const finalSession = { ...session, messages: finalMessages, updatedAt: Date.now() };
+      
       await storage.saveSession(finalSession);
       setSessions(prev => {
         const exists = prev.find(s => s.id === sId);
         if (exists) return prev.map(s => s.id === sId ? finalSession : s);
         return [finalSession, ...prev];
       });
+      setCurrentRenderSession(finalSession);
     } catch (e: any) {
       console.error("Chat Error:", e);
       setIsLoading(false);
-      const errorMsg = "System interruption. Please try again.";
+      const errorMsg = "System interruption. Fadlan dib isku day.";
       setCurrentRenderSession(prev => prev ? { 
         ...prev, 
         messages: prev.messages.map(m => m.id === assistantId ? { ...m, content: errorMsg } : m) 
@@ -137,34 +142,34 @@ const App: React.FC = () => {
   if (!user) return <AuthView onAuthSuccess={(u) => setUser(u)} />;
 
   return (
-    <div className="flex h-screen w-full bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans overflow-hidden transition-colors">
+    <div className="flex h-screen w-full bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans overflow-hidden transition-colors selection:bg-blue-500/30">
       <Sidebar 
         user={user} isRealUser={true} onUpdateUser={() => {}} sessions={sessions} activeSessionId={activeSessionId}
         onSelectSession={setActiveSessionId} onNewChat={() => { setActiveSessionId(null); setCurrentRenderSession(null); setView('chat'); }}
         view={view} setView={setView} isOpen={isSidebarOpen} onToggle={() => setSidebarOpen(!isSidebarOpen)}
-        onDeleteSession={async (id) => { await storage.deleteSession(id); setSessions(prev => prev.filter(s => s.id !== id)); }}
+        onDeleteSession={async (id) => { await storage.deleteSession(id); setSessions(prev => prev.filter(s => s.id !== id)); if(activeSessionId === id) setActiveSessionId(null); }}
         onLogOut={() => { storage.setActiveUser(null); setUser(null); }} 
         isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)}
       />
       
-      <main className="flex-1 flex flex-col relative w-full h-full min-w-0">
-        <header className="h-14 md:h-16 flex items-center justify-between px-4 md:px-6 bg-white/80 dark:bg-black/80 backdrop-blur-md z-10 shrink-0">
-          <div className="flex items-center gap-2 md:gap-4">
+      <main className="flex-1 flex flex-col relative w-full h-full min-w-0 border-none">
+        <header className="h-14 md:h-20 flex items-center justify-between px-6 md:px-10 bg-white/80 dark:bg-black/80 backdrop-blur-xl z-10 shrink-0 border-none">
+          <div className="flex items-center gap-4">
             <button onClick={() => setSidebarOpen(true)} className="md:hidden p-2 text-zinc-500 hover:text-black dark:hover:text-white transition-colors">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" strokeWidth="2.5"/></svg>
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" strokeWidth="2.5"/></svg>
             </button>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-              <span className="text-[10px] md:text-xs font-bold text-zinc-400 truncate tracking-widest uppercase">Aqli Neural Link</span>
+            <div className="flex flex-col">
+              <span className="text-[11px] font-black text-blue-500 uppercase tracking-[0.3em]">Aqli Neural Link</span>
+              <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">Active Edge Processing</span>
             </div>
           </div>
-          <div className="flex items-center gap-2 md:gap-3">
+          <div className="flex items-center gap-4">
              {view !== 'chat' && (
-               <button onClick={() => setView('chat')} className="text-[10px] font-bold text-zinc-500 hover:text-black dark:hover:text-white transition-all bg-zinc-100 dark:bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-200 dark:border-white/5">
-                 Chat
+               <button onClick={() => setView('chat')} className="text-[10px] font-black text-zinc-500 hover:text-black dark:hover:text-white transition-all bg-zinc-100 dark:bg-zinc-900 px-5 py-2 rounded-full border border-zinc-200 dark:border-white/5 uppercase tracking-widest">
+                 Dhex-dhexaad
                </button>
              )}
-             <div className="w-8 h-8 rounded-xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-[10px] font-bold overflow-hidden border border-zinc-200 dark:border-white/5 shadow-sm">
+             <div className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-xs font-black overflow-hidden border border-zinc-200 dark:border-white/5 shadow-2xl">
                {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.name.charAt(0)}
              </div>
           </div>
@@ -177,17 +182,22 @@ const App: React.FC = () => {
             <AdminConsole />
           ) : (
             <>
-              <div ref={scrollRef} className="flex-1 overflow-y-auto pt-4 md:pt-8 pb-32 md:pb-40 custom-scrollbar w-full">
-                <div className="max-w-3xl mx-auto px-4 md:px-6 w-full">
+              <div ref={scrollRef} className="flex-1 overflow-y-auto pt-6 pb-40 md:pb-52 custom-scrollbar w-full border-none">
+                <div className="max-w-4xl mx-auto px-6 md:px-10 w-full">
                   {!currentRenderSession || currentRenderSession.messages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center mt-12 md:mt-24 text-center animate-in fade-in duration-1000 w-full">
-                      <Logo className="w-24 h-24 md:w-32 md:h-32 mb-6" />
-                      <h1 className="text-xl md:text-3xl font-black mb-4 tracking-tighter text-zinc-900 dark:text-white px-4 leading-tight">
-                        How can I assist you today?
+                    <div className="flex flex-col items-center justify-center mt-24 md:mt-40 text-center animate-in fade-in duration-1000 w-full">
+                      <Logo className="w-32 h-32 md:w-48 md:h-48 mb-10" />
+                      <h1 className="text-3xl md:text-5xl font-black mb-6 tracking-tighter text-zinc-900 dark:text-white px-4 leading-tight">
+                        Waa maxay fikirkaaga maanta?
                       </h1>
+                      <div className="flex gap-4 opacity-30">
+                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Reasoning</span>
+                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Vision</span>
+                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Voice</span>
+                      </div>
                     </div>
                   ) : (
-                    <div className="space-y-6 md:space-y-10 w-full">
+                    <div className="space-y-12 md:space-y-16 w-full pb-10">
                       {currentRenderSession.messages.map(m => <ChatMessage key={m.id} message={m} user={user} />)}
                       {isLoading && <ThinkingIndicator />}
                     </div>
@@ -195,12 +205,12 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              <div className="absolute bottom-0 inset-x-0 p-4 md:p-8 bg-gradient-to-t from-white dark:from-black via-white/80 dark:via-black/80 to-transparent z-20">
-                <div className="max-w-3xl mx-auto relative w-full">
-                  <div className="bg-zinc-50 dark:bg-zinc-900/80 rounded-[2rem] p-2 md:p-3 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all shadow-xl backdrop-blur-md">
-                    <div className="flex items-center gap-1 md:gap-2">
-                      <button onClick={() => fileInputRef.current?.click()} className="p-3 md:p-4 text-zinc-400 hover:text-blue-600 transition-all shrink-0">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2.5" strokeLinecap="round"/></svg>
+              <div className="absolute bottom-0 inset-x-0 p-6 md:p-12 bg-gradient-to-t from-white dark:from-black via-white/95 dark:via-black/95 to-transparent z-20 border-none">
+                <div className="max-w-4xl mx-auto relative w-full">
+                  <div className="bg-zinc-50 dark:bg-zinc-900/90 rounded-[2.5rem] p-3 md:p-4 focus-within:ring-4 focus-within:ring-blue-500/10 transition-all shadow-2xl backdrop-blur-2xl border border-zinc-200/50 dark:border-white/5">
+                    <div className="flex items-center gap-3 md:gap-4">
+                      <button onClick={() => fileInputRef.current?.click()} className="p-4 text-zinc-400 hover:text-blue-500 transition-all shrink-0 hover:scale-110 active:scale-95">
+                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2.5" strokeLinecap="round"/></svg>
                       </button>
                       <input type="file" ref={fileInputRef} className="hidden" multiple onChange={(e) => {
                         const files = Array.from(e.target.files || []) as File[];
@@ -216,12 +226,12 @@ const App: React.FC = () => {
                       <textarea 
                         value={input} onChange={e => setInput(e.target.value)}
                         onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) { e.preventDefault(); handleSend(); } }}
-                        placeholder="Ask Aqli anything..."
-                        className="flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-base py-3 md:py-4 outline-none resize-none max-h-40 dark:text-white placeholder-zinc-400 font-medium"
+                        placeholder="Fariin u dir Aqli..."
+                        className="flex-1 bg-transparent border-none focus:ring-0 text-base md:text-lg py-4 outline-none resize-none max-h-48 dark:text-white placeholder-zinc-400 font-bold"
                         rows={1}
                       />
-                      <button onClick={handleSend} disabled={isLoading || (!input.trim() && attachments.length === 0)} className="w-10 h-10 md:w-14 md:h-14 flex items-center justify-center bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl md:rounded-3xl disabled:opacity-20 hover:scale-105 active:scale-95 transition-all shadow-xl">
-                        <svg className="w-5 h-5 md:w-7 md:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" strokeWidth="3" strokeLinecap="round"/></svg>
+                      <button onClick={handleSend} disabled={isLoading || (!input.trim() && attachments.length === 0)} className="w-14 h-14 md:w-16 md:h-16 flex items-center justify-center bg-zinc-900 dark:bg-white text-white dark:text-black rounded-3xl disabled:opacity-20 hover:scale-105 active:scale-95 transition-all shadow-2xl shrink-0">
+                        <svg className="w-7 h-7 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       </button>
                     </div>
                   </div>
