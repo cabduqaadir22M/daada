@@ -8,7 +8,7 @@ export const ThinkingIndicator: React.FC = () => (
       <span className="w-1 h-1 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
       <span className="w-1 h-1 bg-blue-500 rounded-full animate-bounce"></span>
     </div>
-    <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 tracking-tight italic">
+    <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 tracking-tight italic uppercase tracking-widest">
       Aqli is thinking...
     </span>
   </div>

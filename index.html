@@ -3,21 +3,18 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>DAADIR.AI | Intelligence Redefined</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>DAADIR.AI | Smart Assistant</title>
     
-    <!-- SEO Meta Tags -->
-    <meta name="description" content="DAADIR.AI - Advanced neural reasoning, vision, and creative intelligence. Built by Daadir.">
-    <meta name="keywords" content="AI, Daadir, Aqli, Intelligence, Reasoning, Vision, UNISO">
+    <meta name="description" content="DAADIR.AI - A smarter way to work.">
     <meta name="author" content="Daadir">
 
-    <!-- Mobile App Settings -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#000000">
 
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         darkMode: 'class',
@@ -36,35 +33,22 @@
         margin: 0;
         -webkit-font-smoothing: antialiased;
         overflow: hidden;
-        transition: background-color 0.3s ease;
+        background-color: #000;
+        height: 100dvh;
       }
 
-      /* GLOBAL SCROLLBAR REMOVAL */
       * {
         scrollbar-width: none !important;
         -ms-overflow-style: none !important;
         border-color: transparent !important;
-        outline-color: transparent !important;
       }
       
       *::-webkit-scrollbar {
         display: none !important;
-        width: 0 !important;
-        height: 0 !important;
-      }
-
-      /* Exception for essential interactive elements */
-      input, textarea, button {
-        border: none !important;
-        outline: none !important;
-      }
-
-      .border-none {
-        border: none !important;
       }
 
       #root {
-        height: 100vh;
+        height: 100dvh;
         display: flex;
       }
 
@@ -79,12 +63,18 @@
         z-index: 9999;
       }
 
-      @keyframes neural-pulse {
-        0%, 100% { opacity: 1; transform: scale(1); filter: blur(0); }
-        50% { opacity: 0.5; transform: scale(0.95); filter: blur(3px); }
+      @keyframes pulse-ring {
+        0% { transform: scale(0.8); opacity: 0; }
+        50% { opacity: 0.1; }
+        100% { transform: scale(1.5); opacity: 0; }
       }
-      .animate-loader {
-        animation: neural-pulse 2.5s infinite ease-in-out;
+      .loader-ring {
+        position: absolute;
+        width: 150px;
+        height: 150px;
+        border: 2px solid #fff;
+        border-radius: 50%;
+        animation: pulse-ring 2s infinite ease-out;
       }
     </style>
   <script type="importmap">
@@ -104,14 +94,13 @@
   <body class="bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 transition-colors">
     <div id="root">
       <div class="initial-loader">
-        <div class="animate-loader" style="width: 120px; height: 120px;">
+        <div class="loader-ring"></div>
+        <div style="width: 80px; height: 80px; position: relative; z-index: 10;">
            <svg viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M120 60 L 120 340 L 200 340 C 300 340, 360 280, 360 200 C 360 120, 300 60, 200 60 L 120 60 Z" fill="#fff" />
-            <path d="M165 105 L 165 295 L 190 295 C 260 295, 300 250, 300 200 C 300 150, 260 105, 190 105 L 165 105 Z" fill="#000" />
-            <rect x="120" y="195" width="45" height="10" fill="#000" />
           </svg>
         </div>
-        <div style="margin-top: 48px; font-weight: 900; font-size: 14px; letter-spacing: 1.2em; color: #fff; text-indent: 1.2em; text-transform: uppercase; opacity: 0.4;">NEURAL CORE</div>
+        <div style="margin-top: 30px; font-weight: 700; font-size: 10px; letter-spacing: 0.5em; color: #fff; opacity: 0.5; text-transform: uppercase;">Loading Aqli...</div>
       </div>
     </div>
     <script type="module" src="/index.tsx"></script>
@@ -121,10 +110,10 @@
           const loader = document.querySelector('.initial-loader');
           if (loader) {
             loader.style.opacity = '0';
-            loader.style.transition = 'opacity 1s cubic-bezier(0.4, 0, 0.2, 1)';
-            setTimeout(() => loader.style.display = 'none', 1000);
+            loader.style.transition = 'opacity 0.8s ease-out';
+            setTimeout(() => loader.style.display = 'none', 800);
           }
-        }, 1500);
+        }, 1200);
       });
     </script>
   </body>

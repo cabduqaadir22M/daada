@@ -21,7 +21,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
-  const [errorStatus, setErrorStatus] = useState<string | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -54,12 +54,11 @@ const App: React.FC = () => {
     scrollToBottom();
   }, [activeSession?.messages.length, isLoading, view]);
 
-  const handleSend = async (overrideInput?: string) => {
-    const textToSend = overrideInput || input;
-    const trimmedInput = textToSend.trim();
+  const handleSend = async () => {
+    const trimmedInput = input.trim();
     if ((!trimmedInput && attachments.length === 0) || isLoading || !user) return;
 
-    setErrorStatus(null);
+    setLastError(null);
     let sId = activeSessionId;
     let session = activeSession;
 
@@ -68,7 +67,7 @@ const App: React.FC = () => {
       session = {
         id: sId,
         userId: user.id,
-        title: trimmedInput.slice(0, 30) || 'Neural Thread',
+        title: trimmedInput.slice(0, 30) || 'New chat',
         messages: [],
         createdAt: Date.now(),
         updatedAt: Date.now()
@@ -88,16 +87,15 @@ const App: React.FC = () => {
     const assistantId = `msg_ai_${Date.now()}`;
     const assistantPlaceholder: Message = { id: assistantId, role: 'assistant', content: '', timestamp: Date.now() + 1 };
     
-    // Add messages locally
     setSessions(prev => prev.map(s => s.id === sId ? { ...s, messages: [...s.messages, userMsg, assistantPlaceholder], updatedAt: Date.now() } : s));
     
-    const previousInput = input;
+    const prevInput = input;
+    const prevAttachments = [...attachments];
     setInput('');
     setAttachments([]);
     setIsLoading(true);
 
     try {
-      // Logic: Send ONLY userMsg if the previous interaction failed to prevent "bad history"
       const stream = geminiService.streamChat([...session.messages, userMsg]);
       let fullContent = '';
       let finalSources: any[] = [];
@@ -115,20 +113,13 @@ const App: React.FC = () => {
         }));
       }
 
-      // Final save
       const updatedMessages = [...session.messages, userMsg, { ...assistantPlaceholder, content: fullContent, sources: finalSources } as any];
       await storage.saveSession({ ...session, messages: updatedMessages, updatedAt: Date.now() });
     } catch (e: any) {
-      console.error("Neural Sync Error:", e);
-      setErrorStatus("Connection Timed Out. Please retry.");
-      
-      // Clean UI: Remove the empty assistant placeholder if failed
-      setSessions(prev => prev.map(s => s.id === sId ? { 
-        ...s, 
-        messages: s.messages.filter(m => m.id !== assistantId) 
-      } : s));
-      
-      setInput(previousInput); // Restore input for retry
+      setLastError(e.message || "I'm having trouble connecting right now.");
+      setSessions(prev => prev.map(s => s.id === sId ? { ...s, messages: s.messages.filter(m => m.id !== assistantId) } : s));
+      setInput(prevInput);
+      setAttachments(prevAttachments);
     } finally {
       setIsLoading(false);
     }
@@ -137,7 +128,7 @@ const App: React.FC = () => {
   if (!user) return <AuthView onAuthSuccess={(u) => setUser(u)} />;
 
   return (
-    <div className="flex h-screen w-full bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans overflow-hidden transition-colors selection:bg-blue-500/30">
+    <div className="flex h-[100dvh] w-full bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans overflow-hidden transition-colors selection:bg-blue-500/30">
       <Sidebar 
         user={user} isRealUser={true} onUpdateUser={() => {}} sessions={sessions} activeSessionId={activeSessionId}
         onSelectSession={setActiveSessionId} onNewChat={() => { setActiveSessionId(null); setView('chat'); }}
@@ -148,23 +139,20 @@ const App: React.FC = () => {
       />
       
       <main className="flex-1 flex flex-col relative w-full h-full min-w-0 border-none">
-        <header className="h-16 md:h-20 flex items-center justify-between px-6 md:px-10 bg-white/80 dark:bg-black/80 backdrop-blur-xl z-10 shrink-0 border-none">
-          <div className="flex items-center gap-4 border-none">
-            <button onClick={() => setSidebarOpen(true)} className="md:hidden p-2 text-zinc-500 hover:text-black dark:hover:text-white transition-colors border-none">
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" strokeWidth="2.5"/></svg>
+        <header className="h-14 md:h-20 flex items-center justify-between px-4 md:px-10 bg-white/80 dark:bg-black/80 backdrop-blur-xl z-30 shrink-0 border-none">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setSidebarOpen(true)} className="md:hidden p-2 text-zinc-500 border-none">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" strokeWidth="2.5"/></svg>
             </button>
-            <div className="flex flex-col border-none">
-              <span className="text-[11px] font-black text-blue-500 uppercase tracking-[0.3em]">DAADIR STABLE CORE</span>
-              <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">v11.0.4 &bull; Global Sync</span>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-blue-500 tracking-widest uppercase">Aqli assistant</span>
+                <span className="px-1.5 py-0.5 bg-blue-600/10 text-[8px] font-bold rounded text-blue-600 uppercase">Beta</span>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-4 border-none">
-             {view !== 'chat' && (
-               <button onClick={() => setView('chat')} className="text-[10px] font-black text-zinc-500 hover:text-black dark:hover:text-white transition-all bg-zinc-100 dark:bg-zinc-900 px-6 py-2 rounded-full uppercase tracking-widest border-none">
-                 EXIT VISION
-               </button>
-             )}
-             <div className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-xs font-black overflow-hidden shadow-2xl border-none">
+          <div className="flex items-center gap-3">
+             <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-xs font-black overflow-hidden border-none shadow-sm">
                {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.name.charAt(0)}
              </div>
           </div>
@@ -177,33 +165,29 @@ const App: React.FC = () => {
             <AdminConsole />
           ) : (
             <>
-              <div ref={scrollRef} className="flex-1 overflow-y-auto pt-6 pb-44 md:pb-56 w-full custom-scrollbar scroll-smooth border-none">
-                <div className="max-w-4xl mx-auto px-6 md:px-10 w-full border-none">
+              <div ref={scrollRef} className="flex-1 overflow-y-auto pt-4 pb-32 md:pb-56 w-full custom-scrollbar scroll-smooth">
+                <div className="max-w-3xl mx-auto px-4 md:px-0 w-full">
                   {!activeSession || activeSession.messages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center mt-24 md:mt-40 text-center animate-in fade-in duration-1000 w-full border-none">
-                      <Logo className="w-32 h-32 md:w-40 md:h-40 mb-10" hideText={false} />
-                      <h1 className="text-3xl md:text-5xl font-black mb-6 tracking-tighter text-zinc-900 dark:text-white px-4 leading-tight border-none">
-                        Stable Somali AI.
-                      </h1>
-                      <div className="flex gap-4 opacity-30 border-none">
-                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Auto Recovery</span>
-                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">Real-time News</span>
-                         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">UNISO Core</span>
+                    <div className="flex flex-col items-center justify-center mt-20 md:mt-32 text-center animate-in fade-in slide-in-from-bottom-4 duration-1000 w-full">
+                      <div className="relative mb-8">
+                        <Logo className="w-20 h-20 md:w-28 md:h-28" hideText={true} />
+                        <span className="absolute -top-2 -right-2 px-2 py-0.5 bg-zinc-900 dark:bg-white text-white dark:text-black text-[8px] font-bold rounded-full uppercase">Beta</span>
                       </div>
+                      <h1 className="text-3xl md:text-5xl font-extrabold mb-4 tracking-tight leading-tight">
+                        What's on your mind?
+                      </h1>
+                      <p className="text-zinc-500 dark:text-zinc-400 text-sm font-medium max-w-sm mx-auto mb-8 px-4">
+                        A smarter way to get things done. Fast, private, and built for you.
+                      </p>
                     </div>
                   ) : (
-                    <div className="w-full pb-10 flex flex-col border-none">
+                    <div className="w-full pb-8 flex flex-col">
                       {activeSession.messages.map(m => <ChatMessage key={m.id} message={m} user={user} />)}
                       {isLoading && <ThinkingIndicator />}
-                      {errorStatus && (
-                        <div className="flex flex-col items-center gap-4 my-8 animate-in zoom-in duration-300">
-                          <p className="text-[10px] font-black text-red-500 uppercase tracking-widest bg-red-500/10 px-6 py-2 rounded-full border border-red-500/20">{errorStatus}</p>
-                          <button 
-                            onClick={() => handleSend()}
-                            className="bg-zinc-900 dark:bg-white text-white dark:text-black text-[10px] font-black uppercase tracking-widest px-8 py-3 rounded-full hover:scale-105 transition-all shadow-xl"
-                          >
-                            Re-establish Sync
-                          </button>
+                      {lastError && (
+                        <div className="flex flex-col items-center gap-2 my-4 animate-in zoom-in duration-300">
+                          <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest text-center px-10 leading-relaxed">{lastError}</p>
+                          <button onClick={handleSend} className="bg-zinc-900 dark:bg-white text-white dark:text-black text-[9px] font-bold uppercase tracking-widest px-6 py-2.5 rounded-full hover:scale-105 transition-transform active:scale-95 shadow-lg">Retry message</button>
                         </div>
                       )}
                     </div>
@@ -211,15 +195,27 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              <div className="absolute bottom-0 inset-x-0 p-6 md:p-12 bg-gradient-to-t from-white dark:from-black via-white/95 dark:via-black/95 to-transparent z-20 border-none">
-                <div className="max-w-4xl mx-auto relative w-full border-none">
-                  <div className="bg-zinc-50 dark:bg-zinc-900/95 rounded-[2.8rem] p-3 md:p-4 shadow-2xl backdrop-blur-3xl border-none">
-                    <div className="flex items-center gap-3 md:gap-4 border-none">
-                      <button onClick={() => fileInputRef.current?.click()} className="p-4 text-zinc-400 hover:text-blue-500 transition-all hover:scale-110 border-none">
-                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2.5" strokeLinecap="round"/></svg>
+              <div className="absolute bottom-0 inset-x-0 p-4 md:p-10 bg-gradient-to-t from-white dark:from-black via-white/95 dark:via-black/95 to-transparent z-40 border-none">
+                <div className="max-w-3xl mx-auto relative w-full border-none">
+                  {attachments.length > 0 && (
+                    <div className="flex gap-2 mb-3 animate-in slide-in-from-bottom-2">
+                      {attachments.map(at => (
+                        <div key={at.id} className="relative w-12 h-12 rounded-xl overflow-hidden shadow-lg border-2 border-white dark:border-zinc-800">
+                           <img src={`data:${at.mimeType};base64,${at.data}`} className="w-full h-full object-cover" />
+                           <button onClick={() => setAttachments(p => p.filter(x => x.id !== at.id))} className="absolute top-0 right-0 bg-red-500 text-white p-0.5 rounded-bl-lg">
+                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="4"/></svg>
+                           </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="bg-zinc-100 dark:bg-zinc-900/90 rounded-[2rem] md:rounded-[2.8rem] p-2 md:p-3 shadow-2xl backdrop-blur-2xl border-none">
+                    <div className="flex items-center gap-2 md:gap-4">
+                      <button onClick={() => fileInputRef.current?.click()} className="p-3 text-zinc-400 hover:text-blue-500 transition-colors border-none">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2.5" strokeLinecap="round"/></svg>
                       </button>
                       <input type="file" ref={fileInputRef} className="hidden" multiple onChange={(e) => {
-                        const files = Array.from(e.target.files || []) as File[];
+                        const files = Array.from(e.target.files || []);
                         files.forEach(file => {
                           const reader = new FileReader();
                           reader.onload = (ev) => {
@@ -232,12 +228,13 @@ const App: React.FC = () => {
                       <textarea 
                         value={input} onChange={e => setInput(e.target.value)}
                         onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) { e.preventDefault(); handleSend(); } }}
-                        placeholder="Ask Aqli anything..."
-                        className="flex-1 bg-transparent border-none focus:ring-0 text-base md:text-lg py-4 outline-none resize-none max-h-48 dark:text-white placeholder-zinc-400 font-bold"
+                        placeholder="Type a message..."
+                        className="flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-lg py-3 outline-none resize-none max-h-32 placeholder-zinc-500 font-semibold"
+                        style={{ color: isDarkMode ? '#ffffff' : '#000000' }}
                         rows={1}
                       />
-                      <button onClick={() => handleSend()} disabled={isLoading || (!input.trim() && attachments.length === 0)} className="w-14 h-14 md:w-16 md:h-16 flex items-center justify-center bg-blue-600 text-white rounded-[1.8rem] disabled:opacity-20 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-blue-600/30 border-none">
-                        <svg className="w-7 h-7 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      <button onClick={handleSend} disabled={isLoading || (!input.trim() && attachments.length === 0)} className="w-12 h-12 md:w-16 md:h-16 flex items-center justify-center bg-blue-600 text-white rounded-[1.4rem] md:rounded-[1.8rem] disabled:opacity-20 active:scale-95 transition-all shadow-xl shadow-blue-600/20 border-none shrink-0">
+                        <svg className="w-6 h-6 md:w-7 md:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       </button>
                     </div>
                   </div>

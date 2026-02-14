@@ -38,10 +38,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
       const inlineParts = part.split(inlineRegex);
 
       return (
-        <span key={index} className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">
+        <span key={index} className="whitespace-pre-wrap text-inherit">
           {inlineParts.map((p, i) => {
             if (p.startsWith('**') && p.endsWith('**')) {
-              return <strong key={i} className="font-black text-black dark:text-white underline decoration-blue-500/30 underline-offset-4">{p.slice(2, -2)}</strong>;
+              return <strong key={i} className="font-black text-inherit underline decoration-blue-500/30 underline-offset-4">{p.slice(2, -2)}</strong>;
             }
             if (p.startsWith('[') && p.includes('](') && p.endsWith(')')) {
               const match = p.match(/\[(.*?)\]\((.*?)\)/);
@@ -84,8 +84,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
   };
 
   return (
-    <div className="prose prose-zinc dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-headings:font-black prose-headings:tracking-tight prose-strong:text-black dark:prose-strong:text-white">
-      {formatText(content)}
+    <div className="max-w-none text-inherit space-y-2">
+      <div className="leading-relaxed text-inherit">
+        {formatText(content)}
+      </div>
     </div>
   );
 };
