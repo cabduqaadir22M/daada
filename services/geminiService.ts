@@ -31,8 +31,8 @@ const generateSystemInstruction = () => {
 - High -> playful (haddii user-ku sidaas yahay).
 
 🗣 QAABKA LUQADDA:
-- Isticmaal Somali cad ama English. 
-- Ha isticmaalin erayo technical ah oo adag (sida "neural core", "logic units") haddii aan loo baahnayn.`;
+- Isticmaal Somali cad ayada oo la raacayo naxwaha saxda ah, ama English. 
+- Ha isticmaalin erayo technical ah oo adag haddii aan loo baahnayn.`;
 };
 
 export class GeminiService {
@@ -75,30 +75,29 @@ export class GeminiService {
     
     try {
       const streamResponse = await ai.models.generateContentStream({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-flash-lite-latest',
         contents,
         config: {
           systemInstruction: generateSystemInstruction(),
-          temperature: 0.7, // Higher for more creative, non-repetitive variety
+          temperature: 0.7,
           topP: 0.9,
-          tools: [{ googleSearch: {} }],
+          thinkingConfig: { thinkingBudget: 0 }
         }
       });
       
       for await (const chunk of streamResponse) {
         const response = chunk as GenerateContentResponse;
-        const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((c: any) => ({ web: c.web })).filter((s: any) => s.web);
         
         if (response.text) {
           yield { 
             text: response.text, 
-            sources: sources?.map(s => ({ title: s.web.title, uri: s.web.uri })) 
+            sources: [] 
           };
         }
       }
     } catch (error: any) {
       if (error?.message?.includes("429")) {
-        throw new Error("Nidaamku hadda wuu mashquulsan yahay (Quota limit). Fadlan cabbaar sug.");
+        throw new Error("Nidaamku hadda wuu mashquulsan yahay. Fadlan wax yar sug (qiyaastii 10 ilbiriqsi) ka dibna mar kale isku day.");
       }
       throw new Error("Waan ka xumahay, xiriirkii ayaa naga go'ay. Fadlan mar kale isku day.");
     }
