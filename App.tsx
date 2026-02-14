@@ -25,6 +25,7 @@ const App: React.FC = () => {
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (isDarkMode) document.documentElement.classList.add('dark');
@@ -54,11 +55,17 @@ const App: React.FC = () => {
     scrollToBottom();
   }, [activeSession?.messages.length, isLoading, view]);
 
+  const handleCancel = () => {
+    abortControllerRef.current = true;
+    setIsLoading(false);
+  };
+
   const handleSend = async () => {
     const trimmedInput = input.trim();
     if ((!trimmedInput && attachments.length === 0) || isLoading || !user) return;
 
     setLastError(null);
+    abortControllerRef.current = false;
     let sId = activeSessionId;
     let session = activeSession;
 
@@ -98,28 +105,32 @@ const App: React.FC = () => {
     try {
       const stream = geminiService.streamChat([...session.messages, userMsg]);
       let fullContent = '';
-      let finalSources: any[] = [];
 
       for await (const update of stream) {
+        if (abortControllerRef.current) break;
+        
         fullContent += (update as any).text || '';
-        if ((update as any).sources) finalSources = (update as any).sources;
 
         setSessions(prev => prev.map(s => {
           if (s.id !== sId) return s;
           return {
             ...s,
-            messages: s.messages.map(m => m.id === assistantId ? { ...m, content: fullContent, sources: finalSources } as any : m)
+            messages: s.messages.map(m => m.id === assistantId ? { ...m, content: fullContent } as any : m)
           };
         }));
       }
 
-      const updatedMessages = [...session.messages, userMsg, { ...assistantPlaceholder, content: fullContent, sources: finalSources } as any];
-      await storage.saveSession({ ...session, messages: updatedMessages, updatedAt: Date.now() });
+      if (!abortControllerRef.current) {
+        const updatedMessages = [...session.messages, userMsg, { ...assistantPlaceholder, content: fullContent } as any];
+        await storage.saveSession({ ...session, messages: updatedMessages, updatedAt: Date.now() });
+      }
     } catch (e: any) {
-      setLastError(e.message || "I'm having trouble connecting right now.");
-      setSessions(prev => prev.map(s => s.id === sId ? { ...s, messages: s.messages.filter(m => m.id !== assistantId) } : s));
-      setInput(prevInput);
-      setAttachments(prevAttachments);
+      if (!abortControllerRef.current) {
+        setLastError(e.message || "Xiriirku waa gaabis. Fadlan isku day markale.");
+        setSessions(prev => prev.map(s => s.id === sId ? { ...s, messages: s.messages.filter(m => m.id !== assistantId) } : s));
+        setInput(prevInput);
+        setAttachments(prevAttachments);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -183,7 +194,7 @@ const App: React.FC = () => {
                   ) : (
                     <div className="w-full pb-8 flex flex-col">
                       {activeSession.messages.map(m => <ChatMessage key={m.id} message={m} user={user} />)}
-                      {isLoading && <ThinkingIndicator />}
+                      {isLoading && <ThinkingIndicator onCancel={handleCancel} />}
                       {lastError && (
                         <div className="flex flex-col items-center gap-2 my-4 animate-in zoom-in duration-300">
                           <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest text-center px-10 leading-relaxed">{lastError}</p>
@@ -233,9 +244,16 @@ const App: React.FC = () => {
                         style={{ color: isDarkMode ? '#ffffff' : '#000000' }}
                         rows={1}
                       />
-                      <button onClick={handleSend} disabled={isLoading || (!input.trim() && attachments.length === 0)} className="w-12 h-12 md:w-16 md:h-16 flex items-center justify-center bg-blue-600 text-white rounded-[1.4rem] md:rounded-[1.8rem] disabled:opacity-20 active:scale-95 transition-all shadow-xl shadow-blue-600/20 border-none shrink-0">
-                        <svg className="w-6 h-6 md:w-7 md:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                      </button>
+                      
+                      {isLoading ? (
+                        <button onClick={handleCancel} className="w-12 h-12 md:w-16 md:h-16 flex items-center justify-center bg-red-500 text-white rounded-[1.4rem] md:rounded-[1.8rem] active:scale-95 transition-all shadow-xl shadow-red-500/20 border-none shrink-0">
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        </button>
+                      ) : (
+                        <button onClick={handleSend} disabled={!input.trim() && attachments.length === 0} className="w-12 h-12 md:w-16 md:h-16 flex items-center justify-center bg-blue-600 text-white rounded-[1.4rem] md:rounded-[1.8rem] disabled:opacity-20 active:scale-95 transition-all shadow-xl shadow-blue-600/20 border-none shrink-0">
+                          <svg className="w-6 h-6 md:w-7 md:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

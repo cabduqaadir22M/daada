@@ -3,36 +3,33 @@ import { GoogleGenAI, GenerateContentResponse, Part, Modality } from "@google/ge
 import { Message, Attachment } from "../types";
 
 const generateSystemInstruction = () => {
-  return `Waxaad tahay Aqli, AI chatbot caqli badan, saaxiibtinimo leh, isla markaana professional ah oo laga dhisay DAADIR.AI.
+  return `Waxaad tahay Aqli, AI chatbot caqli badan oo laga dhisay DAADIR.AI. 
 
-🧠 HAB-DHAQANKA GUUD:
-1. Su’aal kasta si cad, sax ah, oo macquul ah uga jawaab.
-2. Kahor jawaab bixinta, si dhab ah u faham waxa la weydiiyay.
-3. Jawaabaha ha noqdaan dabiici, fudud, oo si wanaagsan loo habeeyay.
-4. Isku dheelli tir: Professional clarity, Saaxiibtinimo, iyo Humor fudud.
-5. ORIGIN: Waxaa ku dhisay Daadir, oo ah arday Computer Science ka barta UNISO. Kaliya sheeg haddii laguu weydiiyo "Ayaa ku dhisay?".
-6. CONTACT: Linkigan (https://daadir.42web.io/) kaliya bixi haddii si toos ah loo weydiiyo developer-ka xiriirkiisa.
+📅 XILLIGA HADDA: Maanta waa 14 Febraayo, 2026. 
+- U dhaqan sidii adoo jooga xilligan, adigoo isticmaalaya xogtaadii ugu dambeysay.
+- HA SHEEGIN "2026 ayaa la igu tababaray" ama "Xogtaydu waxay ku egtahay 2026". Kaliya bixi jawaabta su'aasha lagaa weydiiyay.
 
-🔁 HADDII SU’AAL LA CELIYO:
-- Ha soo celin jawaabtii hore sida ay ahayd.
-- Jawaabta si kale u dhig (ereyo cusub, qaab cusub, sharaxaad cusub).
-- Qaabka beddel mar kasta: mar kooban, mar faahfaahsan, mar tusaale leh, ama step-by-step.
-- Ha odhan “hore ayaan uga jawaabay”.
+🧠 XEERARKA WADA-SHEEKAYSIGA:
+1. Faham user-ka, ha ku darin wax aan user-ku sheegin.
+2. Ha qalin ama ha soo darin taariikhda ama xog aan la bixin haddii aan loo baahnayn.
+3. Ha iloobin waxa uu user hore uga hadlay, laakiin markasta soo saar **hal jawaab keliya** oo nadiif ah.
+4. Haddii user-ku isla su’aal ku celiyo: Jawaabta isku micnaha leh u dhig **qaab kale**, ha soo celin ereyadii hore sidooda.
+5. Isticmaal Emoji mararka ku habboon si dabiici ah, laakiin ha badin.
 
-🎭 PERSONALITY MODES (AUTO ADAPT):
-- Professional Mode: Cad, nidaamsan.
-- Friendly Mode: Dabiici, saaxiibtinimo.
-- Funny Smart Mode: Humor fudud iyo analogies xiiso leh.
-- Teacher/Mentor Mode: Step-by-step iyo talooyin practical ah.
+📷 FALANQAYNTA SAWIRRADA (VISION):
+Marka user-ku sawir soo diro, u falanqee qaabkan:
+1. **Waxa sawirka ku jira**: Sharaxaad kooban oo sax ah.
+2. **Dhibaatada la arkay**: Haddii ay jirto dhibaato, khalad, ama xaalad aan caadi ahayn.
+3. **Sababta suurtagalka ah**: Maxaa keenay dhibkaas?
+4. **Sida loo xaliyo**: Tallaabo-tallaabo u sharax xalka.
+5. **Talooyin & Digniin**: Haddii khatar jirto, bixi digniin cad.
 
-😄 EMOJI POLICY:
-- Low -> professional topics.
-- Medium -> friendly conversation.
-- High -> playful (haddii user-ku sidaas yahay).
+⚠️ HABAYNTA QORAALKA (FORMATTING):
+- HA ISTICMAALIN astaanta '##' ama cinwaannada Markdown-ka.
+- Isticmaal farta dhumucda leh (**Bold**), xariiqyo (---), ama liisaska (bullet points).
+- Jawaabtaadu ha noqoto mid professional ah, saaxiibtinimo leh, oo xiiso leh.
 
-🗣 QAABKA LUQADDA:
-- Isticmaal Somali cad ayada oo la raacayo naxwaha saxda ah, ama English. 
-- Ha isticmaalin erayo technical ah oo adag haddii aan loo baahnayn.`;
+🗣 LUQADDA: Somali ama English oo fasiix ah.`;
 };
 
 export class GeminiService {
@@ -47,11 +44,15 @@ export class GeminiService {
 
   private prepareHistory(messages: Message[]): { role: 'user' | 'model'; parts: Part[] }[] {
     const cleanHistory: { role: 'user' | 'model'; parts: Part[] }[] = [];
-    const validMessages = messages.filter(m => !m.content.includes("trouble connecting") && m.content.trim().length > 0);
+    const validMessages = messages.filter(m => m.content.trim().length > 0 || (m.attachments && m.attachments.length > 0));
 
     validMessages.forEach((m) => {
       const role = m.role === 'assistant' ? 'model' : 'user';
-      const parts: Part[] = [{ text: m.content.trim() }];
+      const parts: Part[] = [];
+      
+      if (m.content.trim().length > 0) {
+        parts.push({ text: m.content.trim() });
+      }
       
       if (m.attachments) {
         m.attachments.forEach(at => {
@@ -59,14 +60,16 @@ export class GeminiService {
         });
       }
 
-      if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === role) {
-        cleanHistory[cleanHistory.length - 1].parts.push(...parts);
-      } else {
-        cleanHistory.push({ role, parts });
+      if (parts.length > 0) {
+        if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === role) {
+          cleanHistory[cleanHistory.length - 1].parts.push(...parts);
+        } else {
+          cleanHistory.push({ role, parts });
+        }
       }
     });
 
-    return cleanHistory.slice(-8);
+    return cleanHistory.slice(-12);
   }
 
   async *streamChat(messages: Message[]) {
@@ -79,27 +82,22 @@ export class GeminiService {
         contents,
         config: {
           systemInstruction: generateSystemInstruction(),
-          temperature: 0.7,
-          topP: 0.9,
-          thinkingConfig: { thinkingBudget: 0 }
+          temperature: 0.75,
+          topP: 0.95,
         }
       });
       
       for await (const chunk of streamResponse) {
         const response = chunk as GenerateContentResponse;
-        
         if (response.text) {
-          yield { 
-            text: response.text, 
-            sources: [] 
-          };
+          yield { text: response.text };
         }
       }
     } catch (error: any) {
       if (error?.message?.includes("429")) {
-        throw new Error("Nidaamku hadda wuu mashquulsan yahay. Fadlan wax yar sug (qiyaastii 10 ilbiriqsi) ka dibna mar kale isku day.");
+        throw new Error("Nidaamka ayaa hadda mashquul ah. Fadlan sug xoogaa yar.");
       }
-      throw new Error("Waan ka xumahay, xiriirkii ayaa naga go'ay. Fadlan mar kale isku day.");
+      throw error;
     }
   }
 
@@ -107,12 +105,18 @@ export class GeminiService {
     this.stopSpeaking();
     try {
       const ai = this.getAI();
+      const ttsPrompt = `Maaddaama aad tahay khabiir ku hadla Af-Soomaaliga, fadlan si fasiix ah oo dabiici ah u aqri qoraalkan. Hubi inaad si sax ah ugu dhawaaqdo xarfaha Soomaaliga (gaar ahaan 'X' iyo 'C'). Isticmaal cod dumar oo deggan, dhiirigelin leh, isla markaana macaan: ${text}`;
+
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text }] }],
+        contents: [{ parts: [{ text: ttsPrompt }] }],
         config: {
           responseModalities: [Modality.AUDIO],
-          speechConfig: { voiceConfig: { voiceName: 'Zephyr' } },
+          speechConfig: { 
+            voiceConfig: { 
+              prebuiltVoiceConfig: { voiceName: 'Puck' } 
+            } 
+          },
         },
       });
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
