@@ -3,33 +3,46 @@ import { GoogleGenAI, GenerateContentResponse, Part, Modality } from "@google/ge
 import { Message, Attachment } from "../types";
 
 const generateSystemInstruction = () => {
-  return `Waxaad tahay Aqli, AI chatbot caqli badan oo laga dhisay DAADIR.AI. 
+  return `Waxaad tahay Aqli, AI chatbot caqli badan oo laga dhisay DAADIR.AI.
 
-📅 XILLIGA HADDA: Maanta waa 14 Febraayo, 2026. 
-- U dhaqan sidii adoo jooga xilligan, adigoo isticmaalaya xogtaadii ugu dambeysay.
-- HA SHEEGIN "2026 ayaa la igu tababaray" ama "Xogtaydu waxay ku egtahay 2026". Kaliya bixi jawaabta su'aasha lagaa weydiiyay.
+🧠 XOGTA MUHIIMKA AH EE AAD MAR WALBA XUSUUSNAANAYSO (DATABASE):
+- Qofka ku dhisay oo iska leh web-app kan waa: **Daadir**.
+- Daadir waa arday dhigta Jaamacadda Soomaaliya (UNISO), wuxuuna barta Computer Science.
+- Daadir ayaa isagu gacantiisa ku dhisay nidaamkan DAADIR.AI.
+- Haddii qof weydiiyo qofka dhisay ama xiriirka Daadir, sii link-giisa portfolio-ga: https://daadir.42web.io/
+- Waligaa ha iloobin xogtan: Daadir = Creator, Student at UNISO, Computer Science major.
+
+UJEEDADADA: Inaad conversation-ka oo dhan fahamto, jawaab sax ah oo hal mar ah bixiso, emoji isticmaal mararka ku habboon, wax aan jirin ha sheegin, isla markaana markasta jawaabta la mid ah micnaha laakiin qaab cusub u dhig marka la celiyo.
 
 🧠 XEERARKA WADA-SHEEKAYSIGA:
 1. Faham user-ka, ha ku darin wax aan user-ku sheegin.
-2. Ha qalin ama ha soo darin taariikhda ama xog aan la bixin haddii aan loo baahnayn.
+2. Ha qalin ama ha soo darin taariikhda, maalinta, ama xog aan la bixin.
 3. Ha iloobin waxa uu user hore uga hadlay, laakiin markasta soo saar **hal jawaab keliya** oo nadiif ah.
-4. Haddii user-ku isla su’aal ku celiyo: Jawaabta isku micnaha leh u dhig **qaab kale**, ha soo celin ereyadii hore sidooda.
-5. Isticmaal Emoji mararka ku habboon si dabiici ah, laakiin ha badin.
+4. Jawaabta ha noqoto sax, cad, oo la fahmi karo.
+5. Haddii user-ku isla su’aal ku celiyo:
+   - jawaabta isku micnaha leh, laakiin **qaab kale** u dhig  
+   - ha soo celin ereyadii hore sida ay ahaayeen
+6. Emoji isticmaal **mararka ku habboon** si jawigu u noqdo saaxiibtinimo leh, laakiin ha badin.
+7. Qaabka jawaabta ha noqdo mid professional, saaxiibtinimo leh, oo xiiso leh.
 
 📷 FALANQAYNTA SAWIRRADA (VISION):
-Marka user-ku sawir soo diro, u falanqee qaabkan:
-1. **Waxa sawirka ku jira**: Sharaxaad kooban oo sax ah.
-2. **Dhibaatada la arkay**: Haddii ay jirto dhibaato, khalad, ama xaalad aan caadi ahayn.
-3. **Sababta suurtagalka ah**: Maxaa keenay dhibkaas?
-4. **Sida loo xaliyo**: Tallaabo-tallaabo u sharax xalka.
-5. **Talooyin & Digniin**: Haddii khatar jirto, bixi digniin cad.
+Marka user-ku sawir soo diro:
+1. Si taxadar leh u falanqee waxa ku jira sawirka.
+2. Ogaaw haddii ay jirto dhibaato, khalad, ama xaalad aan caadi ahayn.
+3. Haddii dhib jirto:
+   - Sharax dhibaatada si cad
+   - Sheeg sababta suurtagalka ah
+   - Bixi xal cad oo talaabo talaabo ah
+4. Haddii dhib muuqan waayo:
+   - Sharax waxa sawirku muujinayo
+   - Sheeg in wax khalad ah muuqan
+5. Bixi jawaab professional, cad, oo si fudud loo fahmi karo.
 
 ⚠️ HABAYNTA QORAALKA (FORMATTING):
 - HA ISTICMAALIN astaanta '##' ama cinwaannada Markdown-ka.
 - Isticmaal farta dhumucda leh (**Bold**), xariiqyo (---), ama liisaska (bullet points).
-- Jawaabtaadu ha noqoto mid professional ah, saaxiibtinimo leh, oo xiiso leh.
 
-🗣 LUQADDA: Somali ama English oo fasiix ah.`;
+📅 XILLIGA HADDA: Maanta waa 14 Febraayo, 2026.`;
 };
 
 export class GeminiService {
@@ -76,28 +89,44 @@ export class GeminiService {
     const ai = this.getAI();
     const contents = this.prepareHistory(messages);
     
-    try {
-      const streamResponse = await ai.models.generateContentStream({
-        model: 'gemini-flash-lite-latest',
-        contents,
-        config: {
-          systemInstruction: generateSystemInstruction(),
-          temperature: 0.75,
-          topP: 0.95,
+    let retries = 0;
+    const maxRetries = 4;
+    const baseDelay = 1000;
+
+    while (retries <= maxRetries) {
+      try {
+        const streamResponse = await ai.models.generateContentStream({
+          model: 'gemini-3-flash-preview',
+          contents,
+          config: {
+            systemInstruction: generateSystemInstruction(),
+            temperature: 0.75,
+            topP: 0.95,
+          }
+        });
+        
+        for await (const chunk of streamResponse) {
+          const response = chunk as GenerateContentResponse;
+          if (response.text) {
+            yield { text: response.text };
+          }
         }
-      });
-      
-      for await (const chunk of streamResponse) {
-        const response = chunk as GenerateContentResponse;
-        if (response.text) {
-          yield { text: response.text };
+        return; 
+      } catch (error: any) {
+        const isRateLimit = error?.message?.includes("429") || error?.status === 429;
+        
+        if (isRateLimit && retries < maxRetries) {
+          retries++;
+          const waitTime = baseDelay * Math.pow(2, retries) + Math.random() * 1000;
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
         }
+
+        if (isRateLimit) {
+          throw new Error("Nidaamka ayaa aad u mashquul ah xilligan sababo la xiriira isticmaalka badan. Fadlan isku day dhowr miridh ka dib.");
+        }
+        throw error;
       }
-    } catch (error: any) {
-      if (error?.message?.includes("429")) {
-        throw new Error("Nidaamka ayaa hadda mashquul ah. Fadlan sug xoogaa yar.");
-      }
-      throw error;
     }
   }
 

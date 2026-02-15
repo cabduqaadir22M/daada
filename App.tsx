@@ -32,10 +32,19 @@ const App: React.FC = () => {
     else document.documentElement.classList.remove('dark');
   }, [isDarkMode]);
 
+  // Request storage persistence on startup
+  useEffect(() => {
+    storage.requestPersistence().catch(console.error);
+  }, []);
+
   const loadSessions = useCallback(async () => {
     if (!user) return;
-    const stored = await storage.getSessions(user.id, false);
-    setSessions(stored);
+    try {
+      const stored = await storage.getSessions(user.id);
+      setSessions(stored);
+    } catch (e) {
+      console.error("Failed to load sessions", e);
+    }
   }, [user]);
 
   useEffect(() => { loadSessions(); }, [loadSessions]);
@@ -158,7 +167,7 @@ const App: React.FC = () => {
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold text-blue-500 tracking-widest uppercase">Aqli assistant</span>
-                <span className="px-1.5 py-0.5 bg-blue-600/10 text-[8px] font-bold rounded text-blue-600 uppercase">Beta</span>
+                <span className="px-1.5 py-0.5 bg-emerald-500/10 text-[8px] font-bold rounded text-emerald-500 uppercase tracking-widest">Secure Storage Active</span>
               </div>
             </div>
           </div>

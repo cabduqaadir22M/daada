@@ -50,15 +50,6 @@ export class ErrorBoundary extends Component<Props, State> {
               >
                 Reload Application
               </button>
-              <button
-                onClick={() => {
-                  localStorage.clear();
-                  window.location.reload();
-                }}
-                className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-xl font-bold transition-all"
-              >
-                Reset System Cache
-              </button>
             </div>
             {this.state.error?.stack && (
               <pre className="mt-8 p-4 bg-black rounded-lg text-[10px] text-zinc-700 font-mono text-left overflow-auto max-h-32">
@@ -70,7 +61,6 @@ export class ErrorBoundary extends Component<Props, State> {
       );
     }
 
-    // Cast 'this' to 'any' to avoid the error where 'props' is not found on the ErrorBoundary type.
     return (this as any).props.children;
   }
 }
